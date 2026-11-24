@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { 
   Menu, Sun, Moon, Bell, Database, CheckCircle2, 
-  User, Shield, LogOut, ChevronDown, Sparkles 
+  User, Shield, LogOut, ChevronDown, Sparkles, RefreshCw 
 } from 'lucide-react';
 import { UserRole } from '../../types/database';
 import { formatDateTime } from '../../utils/helpers';
@@ -21,7 +21,8 @@ export const Topbar: React.FC<TopbarProps> = ({
   const { 
     currentUser, role, logout, theme, 
     toggleTheme, schoolSettings, 
-    academicYears, semesters, notifications, markNotificationRead 
+    academicYears, semesters, notifications, markNotificationRead,
+    isSyncing, refreshDataFromHostinger
   } = useApp();
 
   const [showNotifications, setShowNotifications] = useState(false);
@@ -64,16 +65,28 @@ export const Topbar: React.FC<TopbarProps> = ({
           <span>{role === 'admin' ? 'Administrator' : role === 'guru' ? 'Guru Pengajar' : 'Siswa'}</span>
         </div>
 
-        {/* MySQL Database Hostinger Status Pill (Full Online) */}
-        <button
-          onClick={onOpenSettings}
-          title="Status: Terhubung langsung ke Database MySQL Hostinger"
-          className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 shadow-sm"
-        >
-          <Database className="w-3.5 h-3.5 text-emerald-600" />
-          <span>MySQL Hostinger Online</span>
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-        </button>
+        {/* MySQL Database Hostinger Status & Refresh Pill (Full Online) */}
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={onOpenSettings}
+            title="Status: Terhubung langsung ke Database MySQL Hostinger (Klik untuk Pengaturan)"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-800 shadow-sm"
+          >
+            <Database className="w-3.5 h-3.5 text-emerald-600" />
+            <span>MySQL Hostinger</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          </button>
+
+          <button
+            onClick={() => refreshDataFromHostinger()}
+            disabled={isSyncing}
+            title="Segarkan data terbaru dari database server MySQL Hostinger"
+            className="p-2 sm:px-2.5 sm:py-1.5 rounded-full bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 transition-all flex items-center gap-1 text-xs font-semibold shadow-sm"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 ${isSyncing ? 'animate-spin' : ''}`} />
+            <span className="hidden lg:inline">{isSyncing ? 'Menyinkronkan...' : 'Segarkan Data'}</span>
+          </button>
+        </div>
 
         {/* Theme Toggle Button */}
         <button

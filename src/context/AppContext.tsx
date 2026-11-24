@@ -51,6 +51,7 @@ interface AppContextType {
   toggleTheme: () => void;
   isDbConnected: boolean;
   isSyncing: boolean;
+  refreshDataFromHostinger: () => Promise<void>;
   syncAllDataToHostinger: () => Promise<{ success: boolean; message: string }>;
   toasts: ToastMessage[];
   showToast: (title: string, message: string, type?: ToastMessage['type']) => void;
@@ -498,79 +499,157 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Otomatis bersihkan jika terdeteksi data dummy lama di browser
-  useEffect(() => {
-    const hasDummyStudent = students.some(s => s.full_name === 'Ahmad Rizky Pratama' || s.nisn === '0081234501');
-    const hasDummyTeacher = teachers.some(t => t.full_name === 'Budi Santoso, M.Pd.' || t.nip === '198203152008011005');
-    if (hasDummyStudent || hasDummyTeacher) {
-      clearAllDummyData();
-    }
-  }, [students, teachers]);
+  // Muat dan Sinkronkan data langsung dari MySQL Hostinger (Full Online Multi-Device Sync)
+  const loadHostingerData = async (silent = false) => {
+    try {
+      if (!silent) setIsSyncing(true);
+      const status = await testHostingerConnection();
+      setIsDbConnected(status.isConfigured);
 
-  // Muat data langsung dari MySQL Hostinger saat aplikasi pertama kali dibuka (Full Online Sync)
-  useEffect(() => {
-    let isMounted = true;
-    const loadHostingerData = async () => {
-      try {
-        setIsSyncing(true);
-        const status = await testHostingerConnection();
-        if (isMounted) setIsDbConnected(status.isConfigured);
+      if (status.isConfigured) {
+        const [
+          remoteProfiles,
+          remoteTeachers,
+          remoteStudents,
+          remoteClasses,
+          remoteSubjects,
+          remoteSchedules,
+          remoteSchoolSettings,
+          remoteAcademicYears,
+          remoteSemesters
+        ] = await Promise.all([
+          fetchFromHostinger('profiles'),
+          fetchFromHostinger('teachers'),
+          fetchFromHostinger('students'),
+          fetchFromHostinger('classes'),
+          fetchFromHostinger('subjects'),
+          fetchFromHostinger('schedules'),
+          fetchFromHostinger('school_settings'),
+          fetchFromHostinger('academic_years'),
+          fetchFromHostinger('semesters')
+        ]);
 
-        if (status.isConfigured) {
-          const [
-            remoteProfiles,
-            remoteTeachers,
-            remoteStudents,
-            remoteClasses,
-            remoteSubjects,
-            remoteSchedules,
-            remoteSchoolSettings
-          ] = await Promise.all([
-            fetchFromHostinger('profiles'),
-            fetchFromHostinger('teachers'),
-            fetchFromHostinger('students'),
-            fetchFromHostinger('classes'),
-            fetchFromHostinger('subjects'),
-            fetchFromHostinger('schedules'),
-            fetchFromHostinger('school_settings')
-          ]);
-
-          if (!isMounted) return;
-
-          if (Array.isArray(remoteProfiles) && remoteProfiles.length > 0) setProfiles(remoteProfiles);
-          if (Array.isArray(remoteTeachers) && remoteTeachers.length > 0) setTeachers(remoteTeachers);
-          if (Array.isArray(remoteStudents) && remoteStudents.length > 0) setStudents(remoteStudents);
-          if (Array.isArray(remoteClasses) && remoteClasses.length > 0) setClasses(remoteClasses);
-          if (Array.isArray(remoteSubjects) && remoteSubjects.length > 0) setSubjects(remoteSubjects);
-          if (Array.isArray(remoteSchedules) && remoteSchedules.length > 0) setSchedules(remoteSchedules);
-          if (Array.isArray(remoteSchoolSettings) && remoteSchoolSettings.length > 0) {
-            setSchoolSettings(prev => ({ ...prev, ...remoteSchoolSettings[0] }));
-          }
+        // 1. Data Guru (Teachers)
+        if (Array.isArray(remoteTeachers) && remoteTeachers.length > 0) {
+          setTeachers(remoteTeachers);
+        } else if (teachers.length > 0) {
+          // Device yang memiliki data guru lokal mendorong ke database MySQL yang masih kosong
+          console.log('[Auto-Sync] Mendorong data guru lokal ke database MySQL Hostinger...');
+          const guruProfiles = profiles.filter(p => p.role === 'guru');
+          if (guruProfiles.length > 0) await insertBulkToHostinger('profiles', guruProfiles);
+          await insertBulkToHostinger('teachers', teachers);
         }
-      } catch (err) {
-        console.warn('[MySQL Hostinger] Gagal memuat data awal:', err);
-      } finally {
-        if (isMounted) setIsSyncing(false);
+
+        // 2. Data Siswa (Students)
+        if (Array.isArray(remoteStudents) && remoteStudents.length > 0) {
+          setStudents(remoteStudents);
+        } else if (students.length > 0) {
+          // Device yang memiliki data siswa lokal mendorong ke database MySQL yang masih kosong
+          console.log('[Auto-Sync] Mendorong data siswa lokal ke database MySQL Hostinger...');
+          const siswaProfiles = profiles.filter(p => p.role === 'siswa');
+          if (siswaProfiles.length > 0) await insertBulkToHostinger('profiles', siswaProfiles);
+          await insertBulkToHostinger('students', students);
+        }
+
+        // 3. Data Kelas (Classes)
+        if (Array.isArray(remoteClasses) && remoteClasses.length > 0) {
+          setClasses(remoteClasses);
+        } else if (classes.length > 0) {
+          await insertBulkToHostinger('classes', classes);
+        }
+
+        // 4. Data Mata Pelajaran (Subjects)
+        if (Array.isArray(remoteSubjects) && remoteSubjects.length > 0) {
+          setSubjects(remoteSubjects);
+        } else if (subjects.length > 0) {
+          await insertBulkToHostinger('subjects', subjects);
+        }
+
+        // 5. Data Jadwal (Schedules)
+        if (Array.isArray(remoteSchedules) && remoteSchedules.length > 0) {
+          setSchedules(remoteSchedules);
+        } else if (schedules.length > 0) {
+          await insertBulkToHostinger('schedules', schedules);
+        }
+
+        // 6. Pengaturan Sekolah (School Settings)
+        if (Array.isArray(remoteSchoolSettings) && remoteSchoolSettings.length > 0) {
+          setSchoolSettings(prev => ({ ...prev, ...remoteSchoolSettings[0] }));
+        }
+
+        // 7. Tahun Ajaran & Semester
+        if (Array.isArray(remoteAcademicYears) && remoteAcademicYears.length > 0) {
+          setAcademicYears(remoteAcademicYears);
+        }
+        if (Array.isArray(remoteSemesters) && remoteSemesters.length > 0) {
+          setSemesters(remoteSemesters);
+        }
+
+        // 8. Profil Pengguna (Profiles)
+        if (Array.isArray(remoteProfiles) && remoteProfiles.length > 0) {
+          const mergedProfiles = [...initialProfiles];
+          remoteProfiles.forEach(rp => {
+            if (!mergedProfiles.some(mp => mp.id === rp.id || (rp.username && mp.username === rp.username))) {
+              mergedProfiles.push(rp);
+            }
+          });
+          setProfiles(mergedProfiles);
+        }
+      }
+    } catch (err) {
+      console.warn('[MySQL Hostinger] Gagal memuat data awal:', err);
+    } finally {
+      if (!silent) setIsSyncing(false);
+    }
+  };
+
+  // Muat data saat startup & pasang sinkronisasi otomatis multi-device
+  useEffect(() => {
+    loadHostingerData(false);
+
+    // Otomatis sinkronkan ulang saat user kembali ke tab browser (berguna saat input dilakukan dari device lain)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadHostingerData(true);
       }
     };
+    window.addEventListener('focus', handleVisibilityChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    loadHostingerData();
-    return () => { isMounted = false; };
+    // Refresh berkala setiap 60 detik jika jendela aktif
+    const syncInterval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadHostingerData(true);
+      }
+    }, 60000);
+
+    return () => {
+      window.removeEventListener('focus', handleVisibilityChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(syncInterval);
+    };
   }, []);
+
+  const refreshDataFromHostinger = async () => {
+    await loadHostingerData(false);
+    showToast('Data Diperbarui', 'Data sekolah telah disegarkan dari database server MySQL Hostinger.');
+  };
 
   // Fungsi sinkronisasi manual seluruh data ke MySQL Hostinger
   const syncAllDataToHostinger = async (): Promise<{ success: boolean; message: string }> => {
     try {
       setIsSyncing(true);
-      await Promise.all([
-        insertBulkToHostinger('profiles', profiles),
-        insertBulkToHostinger('teachers', teachers),
-        insertBulkToHostinger('students', students),
-        insertBulkToHostinger('classes', classes),
-        insertBulkToHostinger('subjects', subjects),
-        insertBulkToHostinger('schedules', schedules),
-        insertToHostinger('school_settings', schoolSettings)
-      ]);
+      // PENTING: Urutan pengunggahan berjenjang agar relasi data konsisten
+      await insertBulkToHostinger('profiles', profiles);
+      await insertToHostinger('school_settings', schoolSettings);
+      await insertBulkToHostinger('academic_years', academicYears);
+      await insertBulkToHostinger('semesters', semesters);
+      await insertBulkToHostinger('classes', classes);
+      await insertBulkToHostinger('subjects', subjects);
+      await insertBulkToHostinger('teachers', teachers);
+      await insertBulkToHostinger('students', students);
+      await insertBulkToHostinger('schedules', schedules);
+      
       showToast('Sinkronisasi Sukses', 'Seluruh data sekolah berhasil disinkronkan ke Database MySQL Hostinger.');
       return { success: true, message: 'Seluruh data berhasil disinkronkan ke database MySQL.' };
     } catch (err: any) {
@@ -836,7 +915,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Teacher Management
-  const addTeacher = (data: Omit<Teacher, 'id'>) => {
+  const addTeacher = async (data: Omit<Teacher, 'id'>) => {
     const id = 'tch-' + Date.now();
     const profileId = 'usr-tch-' + Date.now();
     const username = data.username || generateUsername(data.full_name);
@@ -868,9 +947,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setProfiles(prev => [...prev.filter(p => p.username !== username && p.email !== teacherEmail), newProfile]);
 
-    // Live sync ke MySQL Hostinger
-    insertToHostinger('teachers', newTeacher);
-    insertToHostinger('profiles', newProfile);
+    // Live sync ke MySQL Hostinger: Pastikan akun login (profiles) diunggah terlebih dahulu
+    await insertToHostinger('profiles', newProfile);
+    await insertToHostinger('teachers', newTeacher);
 
     logAction('CREATE', 'Data Guru', `Menambah guru baru: ${data.full_name} (Username: ${username})`);
     showToast('Berhasil', `Data Guru ${data.full_name} berhasil disimpan. Username login: ${username}`);
@@ -915,7 +994,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Dihapus', 'Data guru telah dihapus.');
   };
 
-  const importTeachers = (teachersList: Omit<Teacher, 'id'>[]) => {
+  const importTeachers = async (teachersList: Omit<Teacher, 'id'>[]) => {
     const newProfiles: Profile[] = [];
     const newTeachers: Teacher[] = teachersList.map((item, index) => {
       const teacherId = 'tch-' + Date.now() + '-' + index;
@@ -953,16 +1032,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTeachers(prev => [...prev, ...newTeachers]);
     setProfiles(prev => [...prev, ...newProfiles]);
 
-    // Live bulk sync ke MySQL Hostinger
-    insertBulkToHostinger('teachers', newTeachers);
-    insertBulkToHostinger('profiles', newProfiles);
+    // Live bulk sync ke MySQL Hostinger: Pastikan akun login (profiles) diunggah terlebih dahulu
+    await insertBulkToHostinger('profiles', newProfiles);
+    await insertBulkToHostinger('teachers', newTeachers);
 
     logAction('IMPORT', 'Data Guru', `Mengimpor ${newTeachers.length} data guru beserta akun login otomatis`);
     showToast('Impor Sukses', `Berhasil mengimpor ${newTeachers.length} data guru dengan akun login default.`);
   };
 
   // Student Management
-  const addStudent = (data: Omit<Student, 'id'>) => {
+  const addStudent = async (data: Omit<Student, 'id'>) => {
     const id = 'std-' + Date.now();
     const profileId = 'usr-std-' + Date.now();
     const username = data.username || generateUsername(data.full_name);
@@ -995,9 +1074,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setProfiles(prev => [...prev.filter(p => p.username !== username && p.email !== studentEmail), newProfile]);
 
-    // Live sync ke MySQL Hostinger
-    insertToHostinger('students', newStudent);
-    insertToHostinger('profiles', newProfile);
+    // Live sync ke MySQL Hostinger: Pastikan akun login (profiles) diunggah terlebih dahulu
+    await insertToHostinger('profiles', newProfile);
+    await insertToHostinger('students', newStudent);
 
     // update class student count
     if (data.class_id) {
@@ -1051,7 +1130,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Dihapus', 'Data siswa berhasil dihapus.');
   };
 
-  const importStudents = (studentsList: Omit<Student, 'id'>[]) => {
+  const importStudents = async (studentsList: Omit<Student, 'id'>[]) => {
     const newProfiles: Profile[] = [];
     const newStudents: Student[] = studentsList.map((item, index) => {
       const cls = classes.find(c => c.id === item.class_id || c.name.toLowerCase() === (item.class_name || '').toLowerCase());
@@ -1092,9 +1171,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setStudents(prev => [...prev, ...newStudents]);
     setProfiles(prev => [...prev, ...newProfiles]);
 
-    // Live bulk sync ke MySQL Hostinger
-    insertBulkToHostinger('students', newStudents);
-    insertBulkToHostinger('profiles', newProfiles);
+    // Live bulk sync ke MySQL Hostinger: Pastikan akun login (profiles) diunggah terlebih dahulu
+    await insertBulkToHostinger('profiles', newProfiles);
+    await insertBulkToHostinger('students', newStudents);
 
     logAction('IMPORT', 'Data Siswa', `Mengimpor ${newStudents.length} data siswa beserta akun login otomatis`);
     showToast('Impor Sukses', `Berhasil mengimpor ${newStudents.length} data siswa dengan akun login default.`);
@@ -1663,6 +1742,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       toggleTheme,
       isDbConnected,
       isSyncing,
+      refreshDataFromHostinger,
       syncAllDataToHostinger,
       toasts,
       showToast,

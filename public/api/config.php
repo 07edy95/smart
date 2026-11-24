@@ -40,7 +40,10 @@ function getDbConnection() {
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES   => false,
         ];
-        return new PDO($dsn, DB_USER, DB_PASS, $options);
+        $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
+        $pdo->exec("SET NAMES utf8mb4");
+        $pdo->exec("SET FOREIGN_KEY_CHECKS = 0");
+        return $pdo;
     } catch (PDOException $e) {
         http_response_code(500);
         echo json_encode([

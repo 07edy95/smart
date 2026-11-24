@@ -9,6 +9,7 @@
 require_once __DIR__ . '/config.php';
 
 $pdo = getDbConnection();
+$pdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
 $method = $_SERVER['REQUEST_METHOD'];
 $table = isset($_GET['table']) ? trim($_GET['table']) : '';
 $id = isset($_GET['id']) ? trim($_GET['id']) : '';
