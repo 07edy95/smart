@@ -4,7 +4,7 @@ import { DataTable, Column } from '../common/DataTable';
 import { Modal } from '../common/Modal';
 import { Assignment, AssignmentSubmission } from '../../types/database';
 import { formatDate, formatDateTime } from '../../utils/helpers';
-import { uploadFile } from '../../lib/supabase';
+import { uploadFile } from '../../lib/hostingerApi';
 import { 
   BookMarked, Plus, Send, CheckCircle2, Clock, 
   Upload, FileText, Award, Eye, MessageSquare, Download, Trash2 
@@ -440,7 +440,7 @@ export const AssignmentModule: React.FC = () => {
                 disabled={isUploading}
                 className="clay-btn-primary text-xs py-2 px-5"
               >
-                {isUploading ? 'Mengunggah ke Supabase...' : 'Kirimkan Tugas'}
+                {isUploading ? 'Mengunggah ke Server...' : 'Kirimkan Tugas'}
               </button>
             </div>
           </form>

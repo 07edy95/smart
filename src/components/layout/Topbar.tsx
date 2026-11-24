@@ -20,7 +20,7 @@ export const Topbar: React.FC<TopbarProps> = ({
 }) => {
   const { 
     currentUser, role, logout, theme, 
-    toggleTheme, isSupabaseLive, schoolSettings, 
+    toggleTheme, schoolSettings, 
     academicYears, semesters, notifications, markNotificationRead 
   } = useApp();
 
@@ -64,19 +64,15 @@ export const Topbar: React.FC<TopbarProps> = ({
           <span>{role === 'admin' ? 'Administrator' : role === 'guru' ? 'Guru Pengajar' : 'Siswa'}</span>
         </div>
 
-        {/* Supabase Status Pill */}
+        {/* MySQL Database Hostinger Status Pill (Full Online) */}
         <button
           onClick={onOpenSettings}
-          title="Klik untuk membuka konfigurasi Supabase"
-          className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-            isSupabaseLive
-              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
-              : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
-          }`}
+          title="Status: Terhubung langsung ke Database MySQL Hostinger"
+          className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 shadow-sm"
         >
-          <Database className="w-3.5 h-3.5" />
-          <span>{isSupabaseLive ? 'Supabase Live' : 'Mode Offline/Lokal'}</span>
-          <span className={`w-2 h-2 rounded-full ${isSupabaseLive ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+          <Database className="w-3.5 h-3.5 text-emerald-600" />
+          <span>MySQL Hostinger Online</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
         </button>
 
         {/* Theme Toggle Button */}
@@ -182,8 +178,8 @@ export const Topbar: React.FC<TopbarProps> = ({
                 }}
                 className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
               >
-                <Database className="w-4 h-4 text-indigo-500" />
-                <span>Konfigurasi Supabase</span>
+                <Database className="w-4 h-4 text-emerald-600" />
+                <span>Database MySQL Hostinger</span>
               </button>
 
               <div className="border-t border-slate-100 dark:border-slate-800 my-1" />

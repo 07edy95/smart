@@ -51,6 +51,10 @@ function generateUuid() {
 }
 
 try {
+    // Ambil daftar kolom aktual dari tabel untuk validasi input
+    $colStmt = $pdo->query("SHOW COLUMNS FROM `{$table}`");
+    $allowedCols = $colStmt->fetchAll(PDO::FETCH_COLUMN);
+
     // -------------------------------------------------------------
     // GET: Ambil Data
     // -------------------------------------------------------------
@@ -72,7 +76,7 @@ try {
         $whereClauses = [];
         $params = [];
         foreach ($_GET as $key => $val) {
-            if (!in_array($key, ['table', 'id', 'action', 'limit', 'offset', 'order_by', 'order_dir'])) {
+            if (!in_array($key, ['table', 'id', 'action', 'limit', 'offset', 'order_by', 'order_dir']) && in_array($key, $allowedCols)) {
                 $whereClauses[] = "`{$key}` = :{$key}";
                 $params[$key] = $val;
             }
@@ -87,13 +91,9 @@ try {
         $orderBy = isset($_GET['order_by']) ? preg_replace('/[^a-zA-Z0-9_]/', '', $_GET['order_by']) : 'created_at';
         $orderDir = (isset($_GET['order_dir']) && strtoupper($_GET['order_dir']) === 'ASC') ? 'ASC' : 'DESC';
 
-        // Cek apakah kolom order ada di tabel
-        try {
-            $testStmt = $pdo->query("SHOW COLUMNS FROM `{$table}` LIKE '{$orderBy}'");
-            if ($testStmt->fetch()) {
-                $sql .= " ORDER BY `{$orderBy}` {$orderDir}";
-            }
-        } catch (Exception $e) {}
+        if (in_array($orderBy, $allowedCols)) {
+            $sql .= " ORDER BY `{$orderBy}` {$orderDir}";
+        }
 
         if (isset($_GET['limit'])) {
             $limit = (int) $_GET['limit'];
@@ -122,21 +122,35 @@ try {
             $pdo->beginTransaction();
             $insertedCount = 0;
             foreach ($inputData as $row) {
+                if (!is_array($row)) continue;
                 if (empty($row['id'])) {
                     $row['id'] = generateUuid();
                 }
-                $keys = array_keys($row);
+                $filteredRow = array_intersect_key($row, array_flip($allowedCols));
+                if (empty($filteredRow)) continue;
+
+                $keys = array_keys($filteredRow);
                 $fields = "`" . implode("`, `", $keys) . "`";
                 $placeholders = ":" . implode(", :", $keys);
-                $insertSql = "INSERT INTO `{$table}` ({$fields}) VALUES ({$placeholders})";
+                
+                // Gunakan ON DUPLICATE KEY UPDATE untuk id agar idempotent
+                $updateParts = [];
+                foreach ($keys as $k) {
+                    if ($k !== 'id') {
+                        $updateParts[] = "`{$k}` = VALUES(`{$k}`)";
+                    }
+                }
+                $onDup = !empty($updateParts) ? " ON DUPLICATE KEY UPDATE " . implode(", ", $updateParts) : "";
+
+                $insertSql = "INSERT INTO `{$table}` ({$fields}) VALUES ({$placeholders}){$onDup}";
                 $stmt = $pdo->prepare($insertSql);
-                $stmt->execute($row);
+                $stmt->execute($filteredRow);
                 $insertedCount++;
             }
             $pdo->commit();
             echo json_encode([
                 'status' => 'success',
-                'message' => "Berhasil menambahkan {$insertedCount} data ke {$table}."
+                'message' => "Berhasil menyimpan {$insertedCount} data ke {$table}."
             ]);
             exit();
         }
@@ -151,19 +165,34 @@ try {
             $inputData['id'] = generateUuid();
         }
 
-        $keys = array_keys($inputData);
+        $filteredData = array_intersect_key($inputData, array_flip($allowedCols));
+        if (empty($filteredData)) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Tidak ada kolom yang cocok dengan skema tabel.']);
+            exit();
+        }
+
+        $keys = array_keys($filteredData);
         $fields = "`" . implode("`, `", $keys) . "`";
         $placeholders = ":" . implode(", :", $keys);
 
-        $sql = "INSERT INTO `{$table}` ({$fields}) VALUES ({$placeholders})";
+        $updateParts = [];
+        foreach ($keys as $k) {
+            if ($k !== 'id') {
+                $updateParts[] = "`{$k}` = VALUES(`{$k}`)";
+            }
+        }
+        $onDup = !empty($updateParts) ? " ON DUPLICATE KEY UPDATE " . implode(", ", $updateParts) : "";
+
+        $sql = "INSERT INTO `{$table}` ({$fields}) VALUES ({$placeholders}){$onDup}";
         $stmt = $pdo->prepare($sql);
-        $stmt->execute($inputData);
+        $stmt->execute($filteredData);
 
         echo json_encode([
             'status' => 'success',
-            'message' => 'Data berhasil ditambahkan ke database MySQL Hostinger.',
-            'id' => $inputData['id'],
-            'data' => $inputData
+            'message' => 'Data berhasil disimpan ke database MySQL Hostinger.',
+            'id' => $filteredData['id'],
+            'data' => $filteredData
         ]);
         exit();
     }
@@ -184,12 +213,18 @@ try {
             exit();
         }
 
-        // Hilangkan id dari update jika ada
+        // Hilangkan id dari kolom yang di-set
         unset($inputData['id']);
+        $filteredData = array_intersect_key($inputData, array_flip($allowedCols));
+
+        if (empty($filteredData)) {
+            echo json_encode(['status' => 'success', 'message' => 'Tidak ada kolom yang diperbarui.', 'id' => $id]);
+            exit();
+        }
 
         $setParts = [];
         $params = ['_id' => $id];
-        foreach ($inputData as $key => $val) {
+        foreach ($filteredData as $key => $val) {
             $setParts[] = "`{$key}` = :{$key}";
             $params[$key] = $val;
         }

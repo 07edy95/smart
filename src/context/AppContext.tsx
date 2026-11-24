@@ -18,7 +18,14 @@ import {
   initialPaymentTypes, initialStudentBills, initialTransactions, 
   initialNotifications, initialActivityLogs 
 } from '../lib/mockData';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { 
+  fetchFromHostinger, 
+  insertToHostinger, 
+  updateInHostinger, 
+  deleteFromHostinger, 
+  insertBulkToHostinger, 
+  testHostingerConnection 
+} from '../lib/hostingerApi';
 import { generateUsername, getDefaultPassword } from '../utils/helpers';
 
 export interface ToastMessage {
@@ -42,8 +49,9 @@ interface AppContextType {
   // Theme & App State
   theme: 'light' | 'dark';
   toggleTheme: () => void;
-  isSupabaseLive: boolean;
-  saveSupabaseConfig: (url: string, key: string) => void;
+  isDbConnected: boolean;
+  isSyncing: boolean;
+  syncAllDataToHostinger: () => Promise<{ success: boolean; message: string }>;
   toasts: ToastMessage[];
   showToast: (title: string, message: string, type?: ToastMessage['type']) => void;
   dismissToast: (id: string) => void;
@@ -183,8 +191,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
 
-  // Supabase Live indicator
-  const [isSupabaseLive, setIsSupabaseLive] = useState<boolean>(isSupabaseConfigured());
+  // Hostinger MySQL Live connection & sync indicator
+  const [isDbConnected, setIsDbConnected] = useState<boolean>(true);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
   // Toast notifications
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -498,15 +507,78 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [students, teachers]);
 
-  // Supabase Configuration Save
-  const saveSupabaseConfig = (url: string, key: string) => {
-    localStorage.setItem('sms_supabase_url', url);
-    localStorage.setItem('sms_supabase_key', key);
-    setIsSupabaseLive(Boolean(url && key));
-    showToast('Konfigurasi Disimpan', 'Konfigurasi Supabase berhasil diperbarui. Halaman akan memuat ulang.');
-    setTimeout(() => {
-      window.location.reload();
-    }, 1000);
+  // Muat data langsung dari MySQL Hostinger saat aplikasi pertama kali dibuka (Full Online Sync)
+  useEffect(() => {
+    let isMounted = true;
+    const loadHostingerData = async () => {
+      try {
+        setIsSyncing(true);
+        const status = await testHostingerConnection();
+        if (isMounted) setIsDbConnected(status.isConfigured);
+
+        if (status.isConfigured) {
+          const [
+            remoteProfiles,
+            remoteTeachers,
+            remoteStudents,
+            remoteClasses,
+            remoteSubjects,
+            remoteSchedules,
+            remoteSchoolSettings
+          ] = await Promise.all([
+            fetchFromHostinger('profiles'),
+            fetchFromHostinger('teachers'),
+            fetchFromHostinger('students'),
+            fetchFromHostinger('classes'),
+            fetchFromHostinger('subjects'),
+            fetchFromHostinger('schedules'),
+            fetchFromHostinger('school_settings')
+          ]);
+
+          if (!isMounted) return;
+
+          if (Array.isArray(remoteProfiles) && remoteProfiles.length > 0) setProfiles(remoteProfiles);
+          if (Array.isArray(remoteTeachers) && remoteTeachers.length > 0) setTeachers(remoteTeachers);
+          if (Array.isArray(remoteStudents) && remoteStudents.length > 0) setStudents(remoteStudents);
+          if (Array.isArray(remoteClasses) && remoteClasses.length > 0) setClasses(remoteClasses);
+          if (Array.isArray(remoteSubjects) && remoteSubjects.length > 0) setSubjects(remoteSubjects);
+          if (Array.isArray(remoteSchedules) && remoteSchedules.length > 0) setSchedules(remoteSchedules);
+          if (Array.isArray(remoteSchoolSettings) && remoteSchoolSettings.length > 0) {
+            setSchoolSettings(prev => ({ ...prev, ...remoteSchoolSettings[0] }));
+          }
+        }
+      } catch (err) {
+        console.warn('[MySQL Hostinger] Gagal memuat data awal:', err);
+      } finally {
+        if (isMounted) setIsSyncing(false);
+      }
+    };
+
+    loadHostingerData();
+    return () => { isMounted = false; };
+  }, []);
+
+  // Fungsi sinkronisasi manual seluruh data ke MySQL Hostinger
+  const syncAllDataToHostinger = async (): Promise<{ success: boolean; message: string }> => {
+    try {
+      setIsSyncing(true);
+      await Promise.all([
+        insertBulkToHostinger('profiles', profiles),
+        insertBulkToHostinger('teachers', teachers),
+        insertBulkToHostinger('students', students),
+        insertBulkToHostinger('classes', classes),
+        insertBulkToHostinger('subjects', subjects),
+        insertBulkToHostinger('schedules', schedules),
+        insertToHostinger('school_settings', schoolSettings)
+      ]);
+      showToast('Sinkronisasi Sukses', 'Seluruh data sekolah berhasil disinkronkan ke Database MySQL Hostinger.');
+      return { success: true, message: 'Seluruh data berhasil disinkronkan ke database MySQL.' };
+    } catch (err: any) {
+      showToast('Sinkronisasi Gagal', err.message || 'Gagal menyinkronkan data.', 'error');
+      return { success: false, message: err.message };
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   // Activity Log Helper
@@ -526,6 +598,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const login = async (identifier: string, passwordInput?: string, preferredRole?: UserRole): Promise<boolean> => {
     const trimmedId = (identifier || '').trim().toLowerCase();
     const trimmedPass = (passwordInput || '').trim();
+
+    // Coba autentikasi via API MySQL Hostinger terlebih dahulu
+    try {
+      const authRes = await fetch('/api/auth.php?action=login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: trimmedId, password: trimmedPass })
+      });
+      if (authRes.ok) {
+        const authData = await authRes.json();
+        if (authData.status === 'success' && authData.user) {
+          setCurrentUser(authData.user);
+          logAction('LOGIN', 'Autentikasi', `Login berhasil via MySQL: ${authData.user.full_name} (${authData.user.role})`);
+          showToast('Login Berhasil', `Selamat datang kembali, ${authData.user.full_name}!`);
+          return true;
+        }
+      }
+    } catch (e) {
+      // Lanjut ke validasi store lokal jika server tidak merespon
+    }
 
     // 1. Cek di tabel profiles (berdasarkan username atau email)
     let matchedProfile = profiles.find(p => 
@@ -664,7 +756,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Master Data Methods
   const updateSchoolSettings = (data: Partial<SchoolSettings>) => {
-    setSchoolSettings(prev => ({ ...prev, ...data, updated_at: new Date().toISOString() }));
+    const updated = { ...schoolSettings, ...data, updated_at: new Date().toISOString() };
+    setSchoolSettings(updated);
+    updateInHostinger('school_settings', schoolSettings.id || 'sch-01', updated);
     logAction('UPDATE', 'Profil Sekolah', 'Memperbarui informasi identitas sekolah');
     showToast('Pengaturan Disimpan', 'Informasi profil sekolah telah diperbarui.');
   };
@@ -673,18 +767,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const id = 'ay-' + Date.now();
     const newAy: AcademicYear = { ...data, id };
     setAcademicYears(prev => [...prev, newAy]);
+    insertToHostinger('academic_years', newAy);
     logAction('CREATE', 'Tahun Ajaran', `Menambah tahun ajaran ${data.name}`);
     showToast('Berhasil', `Tahun ajaran ${data.name} berhasil ditambahkan.`);
   };
 
   const updateAcademicYear = (id: string, data: Partial<AcademicYear>) => {
     setAcademicYears(prev => prev.map(ay => ay.id === id ? { ...ay, ...data } : ay));
+    updateInHostinger('academic_years', id, data);
     logAction('UPDATE', 'Tahun Ajaran', `Mengubah tahun ajaran ${id}`);
     showToast('Berhasil', 'Data tahun ajaran telah diperbarui.');
   };
 
   const deleteAcademicYear = (id: string) => {
     setAcademicYears(prev => prev.filter(ay => ay.id !== id));
+    deleteFromHostinger('academic_years', id);
     logAction('DELETE', 'Tahun Ajaran', `Menghapus tahun ajaran ${id}`);
     showToast('Dihapus', 'Tahun ajaran berhasil dihapus.');
   };
@@ -692,12 +789,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const setActiveAcademicYear = (id: string) => {
     setAcademicYears(prev => prev.map(ay => ({ ...ay, is_active: ay.id === id })));
     setSchoolSettings(prev => ({ ...prev, active_academic_year_id: id }));
+    updateInHostinger('school_settings', schoolSettings.id || 'sch-01', { active_academic_year_id: id });
     showToast('Tahun Ajaran Aktif', 'Tahun ajaran aktif berhasil diganti.');
   };
 
   const setActiveSemester = (id: string) => {
     setSemesters(prev => prev.map(s => ({ ...s, is_active: s.id === id })));
     setSchoolSettings(prev => ({ ...prev, active_semester_id: id }));
+    updateInHostinger('school_settings', schoolSettings.id || 'sch-01', { active_semester_id: id });
     showToast('Semester Aktif', 'Semester aktif berhasil diperbarui.');
   };
 
@@ -712,6 +811,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       student_count: 0
     };
     setClasses(prev => [...prev, newClass]);
+    insertToHostinger('classes', newClass);
     logAction('CREATE', 'Data Kelas', `Menambah kelas baru ${data.name}`);
     showToast('Berhasil', `Kelas ${data.name} berhasil ditambahkan.`);
   };
@@ -723,12 +823,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...data,
       homeroom_teacher_name: teacher ? teacher.full_name : c.homeroom_teacher_name
     } : c));
+    updateInHostinger('classes', id, data);
     logAction('UPDATE', 'Data Kelas', `Memperbarui kelas ${id}`);
     showToast('Berhasil', 'Data rombel/kelas berhasil disimpan.');
   };
 
   const deleteClass = (id: string) => {
     setClasses(prev => prev.filter(c => c.id !== id));
+    deleteFromHostinger('classes', id);
     logAction('DELETE', 'Data Kelas', `Menghapus kelas ${id}`);
     showToast('Dihapus', 'Data kelas telah dihapus.');
   };
@@ -766,18 +868,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setProfiles(prev => [...prev.filter(p => p.username !== username && p.email !== teacherEmail), newProfile]);
 
+    // Live sync ke MySQL Hostinger
+    insertToHostinger('teachers', newTeacher);
+    insertToHostinger('profiles', newProfile);
+
     logAction('CREATE', 'Data Guru', `Menambah guru baru: ${data.full_name} (Username: ${username})`);
     showToast('Berhasil', `Data Guru ${data.full_name} berhasil disimpan. Username login: ${username}`);
   };
 
   const updateTeacher = (id: string, data: Partial<Teacher>) => {
     setTeachers(prev => prev.map(t => t.id === id ? { ...t, ...data } : t));
+    updateInHostinger('teachers', id, data);
+
     // Jika ada update username / password / email / full_name, update profil login terkait juga
     if (data.username || data.password || data.email || data.full_name) {
       setProfiles(prev => prev.map(p => {
         const t = teachers.find(item => item.id === id);
         if (p.id === t?.profile_id || (t?.username && p.username === t.username) || p.email === t?.email) {
-          return {
+          const updated = {
             ...p,
             username: data.username || p.username,
             password: data.password || p.password,
@@ -785,6 +893,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             full_name: data.full_name || p.full_name,
             updated_at: new Date().toISOString()
           };
+          updateInHostinger('profiles', p.id, updated);
+          return updated;
         }
         return p;
       }));
@@ -797,8 +907,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const t = teachers.find(item => item.id === id);
     if (t?.profile_id) {
       setProfiles(prev => prev.filter(p => p.id !== t.profile_id));
+      deleteFromHostinger('profiles', t.profile_id);
     }
     setTeachers(prev => prev.filter(t => t.id !== id));
+    deleteFromHostinger('teachers', id);
     logAction('DELETE', 'Data Guru', `Menghapus data guru ${id}`);
     showToast('Dihapus', 'Data guru telah dihapus.');
   };
@@ -840,6 +952,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setTeachers(prev => [...prev, ...newTeachers]);
     setProfiles(prev => [...prev, ...newProfiles]);
+
+    // Live bulk sync ke MySQL Hostinger
+    insertBulkToHostinger('teachers', newTeachers);
+    insertBulkToHostinger('profiles', newProfiles);
+
     logAction('IMPORT', 'Data Guru', `Mengimpor ${newTeachers.length} data guru beserta akun login otomatis`);
     showToast('Impor Sukses', `Berhasil mengimpor ${newTeachers.length} data guru dengan akun login default.`);
   };
@@ -878,6 +995,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setProfiles(prev => [...prev.filter(p => p.username !== username && p.email !== studentEmail), newProfile]);
 
+    // Live sync ke MySQL Hostinger
+    insertToHostinger('students', newStudent);
+    insertToHostinger('profiles', newProfile);
+
     // update class student count
     if (data.class_id) {
       setClasses(prev => prev.map(c => c.id === data.class_id ? { ...c, student_count: (c.student_count || 0) + 1 } : c));
@@ -893,19 +1014,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...data,
       class_name: cls ? cls.name : s.class_name
     } : s));
+    updateInHostinger('students', id, data);
 
     // Update profil akun login jika ada perubahan
     if (data.username || data.password || data.full_name) {
       setProfiles(prev => prev.map(p => {
         const s = students.find(item => item.id === id);
         if (p.id === s?.profile_id || (s?.username && p.username === s.username)) {
-          return {
+          const updated = {
             ...p,
             username: data.username || p.username,
             password: data.password || p.password,
             full_name: data.full_name || p.full_name,
             updated_at: new Date().toISOString()
           };
+          updateInHostinger('profiles', p.id, updated);
+          return updated;
         }
         return p;
       }));
@@ -919,8 +1043,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const s = students.find(item => item.id === id);
     if (s?.profile_id) {
       setProfiles(prev => prev.filter(p => p.id !== s.profile_id));
+      deleteFromHostinger('profiles', s.profile_id);
     }
     setStudents(prev => prev.filter(s => s.id !== id));
+    deleteFromHostinger('students', id);
     logAction('DELETE', 'Data Siswa', `Menghapus siswa ${id}`);
     showToast('Dihapus', 'Data siswa berhasil dihapus.');
   };
@@ -965,6 +1091,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setStudents(prev => [...prev, ...newStudents]);
     setProfiles(prev => [...prev, ...newProfiles]);
+
+    // Live bulk sync ke MySQL Hostinger
+    insertBulkToHostinger('students', newStudents);
+    insertBulkToHostinger('profiles', newProfiles);
+
     logAction('IMPORT', 'Data Siswa', `Mengimpor ${newStudents.length} data siswa beserta akun login otomatis`);
     showToast('Impor Sukses', `Berhasil mengimpor ${newStudents.length} data siswa dengan akun login default.`);
   };
@@ -981,24 +1112,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updated_at: new Date().toISOString(),
     };
     setSubjects(prev => [...prev, newSubject]);
+    insertToHostinger('subjects', newSubject);
     logAction('CREATE', 'Mata Pelajaran', `Menambah mata pelajaran: ${data.name}`);
     showToast('Berhasil', `Mata pelajaran ${data.name} berhasil ditambahkan.`);
   };
 
   const updateSubject = (id: string, data: Partial<Subject>) => {
     const teacher = data.teacher_id ? teachers.find(t => t.id === data.teacher_id) : undefined;
-    setSubjects(prev => prev.map(s => s.id === id ? {
-      ...s,
+    const payload = {
       ...data,
-      teacher_name: teacher ? teacher.full_name : (data.teacher_name !== undefined ? data.teacher_name : s.teacher_name),
+      teacher_name: teacher ? teacher.full_name : (data.teacher_name !== undefined ? data.teacher_name : undefined),
       updated_at: new Date().toISOString()
-    } : s));
+    };
+    setSubjects(prev => prev.map(s => s.id === id ? { ...s, ...payload } : s));
+    updateInHostinger('subjects', id, payload);
     logAction('UPDATE', 'Mata Pelajaran', `Memperbarui mata pelajaran ${id}`);
     showToast('Berhasil', 'Data mata pelajaran berhasil disimpan.');
   };
 
   const deleteSubject = (id: string) => {
     setSubjects(prev => prev.filter(s => s.id !== id));
+    deleteFromHostinger('subjects', id);
     logAction('DELETE', 'Mata Pelajaran', `Menghapus mata pelajaran ${id}`);
     showToast('Dihapus', 'Mata pelajaran berhasil dihapus.');
   };
@@ -1022,6 +1156,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     setSubjects(prev => [...prev, ...newSubjects]);
+    insertBulkToHostinger('subjects', newSubjects);
     logAction('IMPORT', 'Mata Pelajaran', `Mengimpor ${newSubjects.length} mata pelajaran`);
     showToast('Impor Sukses', `Berhasil mengimpor ${newSubjects.length} mata pelajaran.`);
   };
@@ -1071,6 +1206,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setSchedules(prev => [...prev, newSchedule]);
+    insertToHostinger('schedules', newSchedule);
     logAction('CREATE', 'Jadwal Pelajaran', `Menambah jadwal ${newSchedule.subject_name} untuk ${newSchedule.class_name}`);
     showToast('Jadwal Ditambahkan', 'Jadwal pelajaran berhasil disimpan tanpa bentrok.');
     return { success: true };
@@ -1108,6 +1244,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       teacher_name: tch?.full_name || s.teacher_name,
     } : s));
 
+    updateInHostinger('schedules', id, merged);
     logAction('UPDATE', 'Jadwal Pelajaran', `Memperbarui jadwal ${id}`);
     showToast('Berhasil', 'Jadwal berhasil diperbarui.');
     return { success: true };
@@ -1115,6 +1252,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteSchedule = (id: string) => {
     setSchedules(prev => prev.filter(s => s.id !== id));
+    deleteFromHostinger('schedules', id);
     logAction('DELETE', 'Jadwal Pelajaran', `Menghapus jadwal ${id}`);
     showToast('Dihapus', 'Jadwal telah dihapus.');
   };
@@ -1132,6 +1270,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return [...filtered, ...newItems];
     });
 
+    insertBulkToHostinger('student_attendance', newItems);
     logAction('CREATE', 'Absensi Siswa', `Mengisi presensi siswa massal (${records.length} data)`);
     showToast('Presensi Disimpan', `Berhasil mencatat presensi untuk ${records.length} siswa.`);
   };
@@ -1148,6 +1287,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const filtered = prev.filter(t => !(t.teacher_id === data.teacher_id && t.date === data.date));
       return [...filtered, newItem];
     });
+    insertToHostinger('teacher_attendance', newItem);
     logAction('CREATE', 'Absensi Guru', `Mencatat presensi guru: ${tch?.full_name}`);
     showToast('Presensi Dicatat', 'Presensi kehadiran guru berhasil disimpan.');
   };
@@ -1155,7 +1295,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Grades
   const addGradeComponent = (data: Omit<GradeComponent, 'id'>) => {
     const id = 'gcomp-' + Date.now();
-    setGradeComponents(prev => [...prev, { ...data, id }]);
+    const item = { ...data, id };
+    setGradeComponents(prev => [...prev, item]);
+    insertToHostinger('grade_components', item);
     showToast('Komponen Dibuat', `Komponen penilaian ${data.name} berhasil dibuat.`);
   };
 
@@ -1177,6 +1319,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return [...filtered, newGrade];
     });
 
+    insertToHostinger('grades', newGrade);
     logAction('UPDATE', 'Nilai Akademik', `Input nilai untuk siswa ${std?.full_name}`);
     showToast('Nilai Disimpan', `Nilai ${sbj?.name} siswa ${std?.full_name} berhasil disimpan.`);
   };
@@ -1200,6 +1343,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return [...filtered, ...items];
     });
 
+    insertBulkToHostinger('grades', items);
     logAction('UPDATE', 'Leger Nilai', `Input ${dataList.length} nilai siswa secara massal`);
     showToast('Leger Nilai Disimpan', `Berhasil menyimpan nilai untuk ${dataList.length} entri.`);
   };
@@ -1219,6 +1363,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       submission_count: 0
     };
     setAssignments(prev => [newAssignment, ...prev]);
+    insertToHostinger('assignments', newAssignment);
 
     // Send notification to all students
     const newNotif: NotificationItem = {
@@ -1237,12 +1382,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateAssignment = (id: string, data: Partial<Assignment>) => {
     setAssignments(prev => prev.map(a => a.id === id ? { ...a, ...data } : a));
+    updateInHostinger('assignments', id, data);
     showToast('Berhasil', 'Data tugas berhasil diperbarui.');
   };
 
   const deleteAssignment = (id: string) => {
     setAssignments(prev => prev.filter(a => a.id !== id));
     setSubmissions(prev => prev.filter(s => s.assignment_id !== id));
+    deleteFromHostinger('assignments', id);
     logAction('DELETE', 'Tugas', `Menghapus tugas ${id}`);
     showToast('Dihapus', 'Tugas berhasil dihapus.');
   };
@@ -1265,6 +1412,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Update assignment submission count
     setAssignments(prev => prev.map(a => a.id === data.assignment_id ? { ...a, submission_count: (a.submission_count || 0) + 1 } : a));
+    insertToHostinger('assignment_submissions', submission);
 
     logAction('SUBMIT', 'Tugas Siswa', `Siswa ${std?.full_name} mengumpulkan tugas ${asg?.title}`);
     showToast('Tugas Terkumpul', 'Tugas Anda berhasil diunggah dan disimpan!');
@@ -1277,6 +1425,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       feedback,
       graded_at: new Date().toISOString()
     } : s));
+    updateInHostinger('assignment_submissions', id, { score, feedback });
     showToast('Penilaian Disimpan', `Submission dinilai dengan skor ${score}.`);
   };
 
@@ -1294,12 +1443,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       teacher_name: tch?.full_name,
     };
     setLearningMaterials(prev => [item, ...prev]);
+    insertToHostinger('learning_materials', item);
     logAction('CREATE', 'Materi Pembelajaran', `Mengunggah materi ${data.title}`);
     showToast('Materi Tersimpan', `Materi "${data.title}" berhasil dibagikan.`);
   };
 
   const deleteLearningMaterial = (id: string) => {
     setLearningMaterials(prev => prev.filter(m => m.id !== id));
+    deleteFromHostinger('learning_materials', id);
     showToast('Dihapus', 'Materi pembelajaran telah dihapus.');
   };
 
@@ -1315,12 +1466,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       supervisor_name: tch?.full_name,
     };
     setExams(prev => [item, ...prev]);
+    insertToHostinger('exams', item);
     logAction('CREATE', 'Manajemen Ujian', `Menjadwalkan ujian ${data.title}`);
     showToast('Ujian Dijadwalkan', `Ujian "${data.title}" telah ditambahkan.`);
   };
 
   const deleteExam = (id: string) => {
     setExams(prev => prev.filter(e => e.id !== id));
+    deleteFromHostinger('exams', id);
     showToast('Dihapus', 'Jadwal ujian telah dihapus.');
   };
 
@@ -1334,41 +1487,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       is_active: true
     };
     setAnnouncements(prev => [item, ...prev]);
+    insertToHostinger('announcements', item);
     logAction('CREATE', 'Pengumuman', `Mempublikasikan pengumuman: ${data.title}`);
     showToast('Pengumuman Dipublish', 'Pengumuman berhasil disiarkan.');
   };
 
   const deleteAnnouncement = (id: string) => {
     setAnnouncements(prev => prev.filter(a => a.id !== id));
+    deleteFromHostinger('announcements', id);
     showToast('Dihapus', 'Pengumuman telah dihapus.');
   };
 
   const addEvent = (data: Omit<AcademicEvent, 'id'>) => {
     const id = 'ev-' + Date.now();
-    setEvents(prev => [...prev, { ...data, id }]);
+    const item = { ...data, id };
+    setEvents(prev => [...prev, item]);
+    insertToHostinger('academic_events', item);
     showToast('Agenda Ditambahkan', `Agenda ${data.title} berhasil masuk kalender.`);
   };
 
   const deleteEvent = (id: string) => {
     setEvents(prev => prev.filter(e => e.id !== id));
+    deleteFromHostinger('academic_events', id);
     showToast('Dihapus', 'Agenda kegiatan dihapus.');
   };
 
   // Inventory
   const addInventory = (data: Omit<InventoryItem, 'id'>) => {
     const id = 'inv-' + Date.now();
-    setInventory(prev => [...prev, { ...data, id }]);
+    const item = { ...data, id };
+    setInventory(prev => [...prev, item]);
+    insertToHostinger('inventory', item);
     logAction('CREATE', 'Inventaris', `Menambah barang inventaris: ${data.item_name}`);
     showToast('Barang Disimpan', `Barang ${data.item_name} berhasil didaftarkan.`);
   };
 
   const updateInventory = (id: string, data: Partial<InventoryItem>) => {
     setInventory(prev => prev.map(i => i.id === id ? { ...i, ...data } : i));
+    updateInHostinger('inventory', id, data);
     showToast('Berhasil', 'Data inventaris diperbarui.');
   };
 
   const deleteInventory = (id: string) => {
     setInventory(prev => prev.filter(i => i.id !== id));
+    deleteFromHostinger('inventory', id);
     showToast('Dihapus', 'Data inventaris telah dihapus.');
   };
 
@@ -1381,6 +1543,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       item_name: inv?.item_name,
     };
     setInventoryLoans(prev => [item, ...prev]);
+    insertToHostinger('inventory_loans', item);
     logAction('LOAN', 'Peminjaman Inventaris', `Peminjaman ${inv?.item_name} oleh ${data.borrower_name}`);
     showToast('Peminjaman Dicatat', `Peminjaman barang berhasil dicatat.`);
   };
@@ -1391,38 +1554,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: 'dikembalikan',
       actual_return_date: new Date().toISOString().split('T')[0]
     } : l));
+    updateInHostinger('inventory_loans', id, {
+      status: 'dikembalikan',
+      actual_return_date: new Date().toISOString().split('T')[0]
+    });
     showToast('Barang Dikembalikan', 'Status peminjaman berhasil diperbarui menjadi dikembalikan.');
   };
 
   // Letters
   const addIncomingLetter = (data: Omit<IncomingLetter, 'id'>) => {
     const id = 'let-in-' + Date.now();
-    setIncomingLetters(prev => [ { ...data, id }, ...prev ]);
+    const item = { ...data, id };
+    setIncomingLetters(prev => [ item, ...prev ]);
+    insertToHostinger('incoming_letters', item);
     logAction('CREATE', 'Surat Masuk', `Mencatat surat masuk no ${data.letter_number}`);
     showToast('Surat Masuk Dicatat', 'Arsip surat masuk berhasil disimpan.');
   };
 
   const deleteIncomingLetter = (id: string) => {
     setIncomingLetters(prev => prev.filter(l => l.id !== id));
+    deleteFromHostinger('incoming_letters', id);
     showToast('Dihapus', 'Surat masuk dihapus.');
   };
 
   const addOutgoingLetter = (data: Omit<OutgoingLetter, 'id'>) => {
     const id = 'let-out-' + Date.now();
-    setOutgoingLetters(prev => [ { ...data, id }, ...prev ]);
+    const item = { ...data, id };
+    setOutgoingLetters(prev => [ item, ...prev ]);
+    insertToHostinger('outgoing_letters', item);
     logAction('CREATE', 'Surat Keluar', `Menerbitkan surat keluar no ${data.letter_number}`);
     showToast('Surat Keluar Dicatat', 'Surat keluar berhasil didaftarkan.');
   };
 
   const deleteOutgoingLetter = (id: string) => {
     setOutgoingLetters(prev => prev.filter(l => l.id !== id));
+    deleteFromHostinger('outgoing_letters', id);
     showToast('Dihapus', 'Surat keluar dihapus.');
   };
 
   // Payments
   const addPaymentType = (data: Omit<PaymentType, 'id'>) => {
     const id = 'pay-' + Date.now();
-    setPaymentTypes(prev => [...prev, { ...data, id }]);
+    const item = { ...data, id };
+    setPaymentTypes(prev => [...prev, item]);
+    insertToHostinger('payment_types', item);
     showToast('Pos Tagihan Dibuat', `Jenis tagihan ${data.name} berhasil dibuat.`);
   };
 
@@ -1437,6 +1612,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       payment_type_name: ptype?.name,
     };
     setStudentBills(prev => [item, ...prev]);
+    insertToHostinger('student_bills', item);
     showToast('Tagihan Dibuat', `Tagihan untuk ${std?.full_name} berhasil dibuat.`);
   };
 
@@ -1450,13 +1626,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       receiver_name: currentUser?.full_name || 'Petugas Keuangan',
     };
     setTransactions(prev => [item, ...prev]);
+    insertToHostinger('payment_transactions', item);
 
     // Update the bill
     setStudentBills(prev => prev.map(b => {
       if (b.id === data.student_bill_id) {
         const newPaid = b.paid_amount + data.amount;
-        const newStatus = newPaid >= b.amount ? 'lunas' : (newPaid > 0 ? 'sebagian' : 'belum_lunas');
-        return { ...b, paid_amount: newPaid, status: newStatus };
+        const newStatus: 'lunas' | 'sebagian' | 'belum_lunas' = newPaid >= b.amount ? 'lunas' : (newPaid > 0 ? 'sebagian' : 'belum_lunas');
+        const updatedBill = { ...b, paid_amount: newPaid, status: newStatus };
+        updateInHostinger('student_bills', b.id, { paid_amount: newPaid, status: newStatus });
+        return updatedBill;
       }
       return b;
     }));
@@ -1482,8 +1661,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateCurrentUserProfile,
       theme,
       toggleTheme,
-      isSupabaseLive,
-      saveSupabaseConfig,
+      isDbConnected,
+      isSyncing,
+      syncAllDataToHostinger,
       toasts,
       showToast,
       dismissToast,

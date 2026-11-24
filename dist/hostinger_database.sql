@@ -153,6 +153,9 @@ CREATE TABLE `subjects` (
   `category` VARCHAR(50) DEFAULT 'Wajib',
   `hours_per_week` INT NOT NULL DEFAULT 2,
   `grade_level` VARCHAR(50) DEFAULT 'Semua',
+  `teacher_id` VARCHAR(36) DEFAULT NULL,
+  `teacher_name` VARCHAR(255) DEFAULT NULL,
+  `passing_grade` INT DEFAULT 75,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -187,7 +187,7 @@ export const ReportsModule: React.FC = () => {
               Pratinjau: {reportCards.find(r => r.id === selectedReport)?.title}
             </h3>
             <p className="text-xs text-slate-500">
-              Data terhubung langsung dengan basis data Supabase
+              Data terhubung langsung dengan basis data MySQL Hostinger
             </p>
           </div>
           <span className="text-xs px-3 py-1 rounded-full bg-blue-50 text-blue-600 font-bold dark:bg-blue-900/30 dark:text-blue-300">

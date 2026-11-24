@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { DataTable, Column } from '../common/DataTable';
 import { Modal } from '../common/Modal';
 import { LearningMaterial } from '../../types/database';
-import { uploadFile } from '../../lib/supabase';
+import { uploadFile } from '../../lib/hostingerApi';
 import { BookOpen, Plus, Download, Trash2, FileText, Video, Presentation } from 'lucide-react';
 
 export const LearningMaterialModule: React.FC = () => {
@@ -229,7 +229,7 @@ export const LearningMaterialModule: React.FC = () => {
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Unggah File Materi (Supabase Storage)
+              Unggah File Materi (Server Hosting)
             </label>
             <input
               type="file"

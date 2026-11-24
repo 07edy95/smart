@@ -192,7 +192,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </p>
               </div>
               <p className="text-[10px] text-[#8C3A2B] dark:text-rose-200/80 leading-tight">
-                Semester Ganjil • Terhubung ke Cloud Supabase
+                Semester Ganjil • MySQL Hostinger Online
               </p>
             </div>
           </div>

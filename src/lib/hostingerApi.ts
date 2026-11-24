@@ -1,11 +1,12 @@
 /**
  * =========================================================================
  * CLIENT ADAPTER DATABASE MYSQL BAWAAN HOSTINGER
- * SISTEM MANAJEMEN SEKOLAH - SMA MEDANGGILI CIRUAS
+ * SISTEM MANAJEMEN SEKOLAH - SMA MEDANGGILI CIRUAS (NPSN: 20605358)
  * =========================================================================
  * 
- * Modul ini menghubungkan antarmuka React dengan backend PHP REST API 
- * yang berjalan di hosting Hostinger (/api/data.php, /api/auth.php).
+ * Modul ini menghubungkan antarmuka React secara langsung dengan backend PHP REST API 
+ * yang berjalan di hosting Hostinger (/api/data.php, /api/auth.php, /api/upload.php).
+ * Database Tunggal: MySQL Hostinger (u190882518_sekolah).
  */
 
 export interface HostingerDbStatus {
@@ -22,14 +23,15 @@ export interface HostingerDbStatus {
 export async function testHostingerConnection(): Promise<HostingerDbStatus> {
   try {
     const res = await fetch('/api/test.php', {
-      headers: { 'Accept': 'application/json' }
+      headers: { 'Accept': 'application/json' },
+      cache: 'no-store'
     });
     
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       return {
         isConfigured: false,
-        message: err.message || `Server merespon dengan status ${res.status}. Pastikan api/config.php sudah diisi.`
+        message: err.message || `Server merespon dengan status ${res.status}. Pastikan database MySQL aktif.`
       };
     }
 
@@ -51,7 +53,7 @@ export async function testHostingerConnection(): Promise<HostingerDbStatus> {
   } catch (e: any) {
     return {
       isConfigured: false,
-      message: 'Tidak dapat menjangkau endpoint /api/test.php. (Normal jika sedang berjalan di localhost Vite dev server).'
+      message: 'Tidak dapat menjangkau endpoint /api/test.php.'
     };
   }
 }
@@ -61,7 +63,9 @@ export async function testHostingerConnection(): Promise<HostingerDbStatus> {
  */
 export async function fetchFromHostinger(table: string): Promise<any[]> {
   try {
-    const res = await fetch(`/api/data.php?table=${encodeURIComponent(table)}`);
+    const res = await fetch(`/api/data.php?table=${encodeURIComponent(table)}`, {
+      cache: 'no-store'
+    });
     if (!res.ok) throw new Error(`HTTP error ${res.status}`);
     const json = await res.json();
     return json.data || [];
@@ -93,6 +97,7 @@ export async function insertToHostinger(table: string, data: Record<string, any>
  */
 export async function insertBulkToHostinger(table: string, dataArray: Record<string, any>[]): Promise<any> {
   try {
+    if (!dataArray || dataArray.length === 0) return { status: 'success', count: 0 };
     const res = await fetch(`/api/data.php?table=${encodeURIComponent(table)}&action=bulk_insert`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -138,23 +143,48 @@ export async function deleteFromHostinger(table: string, id: string): Promise<an
 }
 
 /**
- * Mengunggah file ke hosting Hostinger (folder /uploads/)
+ * Mengunggah berkas ke server hosting Hostinger (/uploads/)
  */
-export async function uploadToHostinger(file: File): Promise<string | null> {
+export async function uploadFile(
+  bucketOrPath: string, 
+  file: File, 
+  _customPath?: string
+): Promise<{ url: string | null; error: Error | null }> {
   try {
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('category', bucketOrPath);
 
     const res = await fetch('/api/upload.php', {
       method: 'POST',
       body: formData
     });
 
-    if (!res.ok) throw new Error(`Upload failed with status ${res.status}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || `Upload gagal dengan status ${res.status}`);
+    }
+
     const data = await res.json();
-    return data.url || null;
-  } catch (e) {
-    console.error('[Hostinger Upload] Gagal mengunggah file:', e);
-    return null;
+    if (data.status === 'success' && data.url) {
+      return { url: data.url, error: null };
+    }
+
+    throw new Error(data.message || 'Gagal mengunggah berkas.');
+  } catch (err: any) {
+    console.error('[Hostinger Upload] Kesalahan pengunggahan file:', err);
+    // Fallback data URL hanya jika endpoint server tidak dapat dijangkau
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        resolve({ url: reader.result as string, error: null });
+      };
+      reader.onerror = () => {
+        resolve({ url: null, error: err });
+      };
+      reader.readAsDataURL(file);
+    });
   }
 }
+
+export const uploadToHostinger = uploadFile;

@@ -4,7 +4,7 @@ import { DataTable, Column } from '../common/DataTable';
 import { Modal } from '../common/Modal';
 import { IncomingLetter, OutgoingLetter } from '../../types/database';
 import { formatDate, exportToPdf } from '../../utils/helpers';
-import { uploadFile } from '../../lib/supabase';
+import { uploadFile } from '../../lib/hostingerApi';
 import { Mail, Send, Inbox, Plus, Trash2, Printer, Download, FileText } from 'lucide-react';
 
 export const LetterModule: React.FC = () => {
