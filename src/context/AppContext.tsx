@@ -69,6 +69,7 @@ interface AppContextType {
   addTeacher: (data: Omit<Teacher, 'id'>) => void;
   updateTeacher: (id: string, data: Partial<Teacher>) => void;
   deleteTeacher: (id: string) => void;
+  importTeachers: (teachersList: Omit<Teacher, 'id'>[]) => void;
 
   students: Student[];
   addStudent: (data: Omit<Student, 'id'>) => void;
@@ -640,6 +641,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTeachers(prev => prev.filter(t => t.id !== id));
     logAction('DELETE', 'Data Guru', `Menghapus data guru ${id}`);
     showToast('Dihapus', 'Data guru telah dihapus.');
+  };
+
+  const importTeachers = (teachersList: Omit<Teacher, 'id'>[]) => {
+    const newProfiles: Profile[] = [];
+    const newTeachers: Teacher[] = teachersList.map((item, index) => {
+      const teacherId = 'tch-' + Date.now() + '-' + index;
+      const profileId = 'usr-tch-' + Date.now() + '-' + index;
+      const baseUsername = item.username || generateUsername(item.full_name) || `guru${item.nip || index}`;
+      const username = index > 0 && teachersList.slice(0, index).some(x => generateUsername(x.full_name) === baseUsername)
+        ? `${baseUsername}${index + 1}`
+        : baseUsername;
+      const password = item.password || getDefaultPassword('guru');
+      const teacherEmail = item.email || `${username}@sekolah.sch.id`;
+
+      newProfiles.push({
+        id: profileId,
+        username,
+        email: teacherEmail,
+        password,
+        full_name: item.full_name,
+        role: 'guru',
+        phone: item.phone,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+
+      return {
+        ...item,
+        id: teacherId,
+        username,
+        password,
+        email: teacherEmail,
+        profile_id: profileId,
+      };
+    });
+
+    setTeachers(prev => [...prev, ...newTeachers]);
+    setProfiles(prev => [...prev, ...newProfiles]);
+    logAction('IMPORT', 'Data Guru', `Mengimpor ${newTeachers.length} data guru beserta akun login otomatis`);
+    showToast('Impor Sukses', `Berhasil mengimpor ${newTeachers.length} data guru dengan akun login default.`);
   };
 
   // Student Management
@@ -1265,6 +1307,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addTeacher,
       updateTeacher,
       deleteTeacher,
+      importTeachers,
       students,
       addStudent,
       updateStudent,

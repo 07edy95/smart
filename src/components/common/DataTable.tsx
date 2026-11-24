@@ -24,6 +24,7 @@ interface DataTableProps<T> {
   onBulkDelete?: (selectedIds: string[]) => void;
   getRowId?: (row: T) => string;
   filterComponent?: React.ReactNode;
+  extraActions?: React.ReactNode;
 }
 
 export function DataTable<T extends { id?: string }>({
@@ -38,6 +39,7 @@ export function DataTable<T extends { id?: string }>({
   onBulkDelete,
   getRowId = (row) => (row as any).id || '',
   filterComponent,
+  extraActions,
 }: DataTableProps<T>) {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -146,6 +148,8 @@ export function DataTable<T extends { id?: string }>({
             <FileText className="w-4 h-4 text-rose-600 dark:text-rose-400" />
             <span className="hidden sm:inline">PDF</span>
           </button>
+
+          {extraActions}
 
           {onAddClick && (
             <button

@@ -3,11 +3,11 @@ import { useApp } from '../../context/AppContext';
 import { DataTable, Column } from '../common/DataTable';
 import { Modal } from '../common/Modal';
 import { Student } from '../../types/database';
-import { formatDate, parseExcelFile, generateUsername, getDefaultPassword } from '../../utils/helpers';
+import { formatDate, parseExcelFile, exportToExcel, generateUsername, getDefaultPassword } from '../../utils/helpers';
 import { 
-  GraduationCap, Eye, Edit3, Trash2, Upload, 
-  FileSpreadsheet, Phone, Users, CheckCircle2,
-  Key, Copy, Check 
+  GraduationCap, Eye, Edit3, Trash2, Upload, Download,
+  FileSpreadsheet, Phone, Users, CheckCircle2, AlertCircle,
+  Key, Copy, Check, Clipboard 
 } from 'lucide-react';
 
 export const StudentModule: React.FC = () => {
@@ -21,6 +21,13 @@ export const StudentModule: React.FC = () => {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // State untuk Input Masal Siswa
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [bulkTab, setBulkTab] = useState<'excel' | 'paste'>('excel');
+  const [pasteText, setPasteText] = useState('');
+  const [bulkPreview, setBulkPreview] = useState<Omit<Student, 'id'>[]>([]);
+  const [selectedBulkClass, setSelectedBulkClass] = useState<string>('');
 
   // Filter state
   const [filterClass, setFilterClass] = useState<string>('all');
@@ -121,7 +128,39 @@ export const StudentModule: React.FC = () => {
     setIsModalOpen(false);
   };
 
-  // Excel Import Handler
+  // Handler Unduh Template Excel Siswa
+  const handleDownloadTemplate = () => {
+    const template = [
+      {
+        'Nama Lengkap': 'Ahmad Dani Pratama',
+        'NIS': '202510001',
+        'NISN': '0081234567',
+        'Jenis Kelamin (L/P)': 'L',
+        'Kelas': classes[0]?.name || 'X-A',
+        'Tempat Lahir': 'Serang',
+        'Tanggal Lahir': '2009-05-12',
+        'Nama Orang Tua / Wali': 'H. Dani Suryana',
+        'No HP Ortu / WhatsApp': '081234567890',
+        'Alamat': 'Ciruas, Serang'
+      },
+      {
+        'Nama Lengkap': 'Nabila Zahra Putri',
+        'NIS': '202510002',
+        'NISN': '0089876543',
+        'Jenis Kelamin (L/P)': 'P',
+        'Kelas': classes[0]?.name || 'X-A',
+        'Tempat Lahir': 'Serang',
+        'Tanggal Lahir': '2009-08-20',
+        'Nama Orang Tua / Wali': 'Rahmat Hidayat',
+        'No HP Ortu / WhatsApp': '081398765432',
+        'Alamat': 'Ciruas, Serang'
+      }
+    ];
+    exportToExcel(template, 'Template_Input_Masal_Siswa_SMART', 'Template Siswa');
+    showToast('Template Diunduh', 'Berkas template Excel siswa berhasil disimpan ke komputer Anda.');
+  };
+
+  // Handler Parse File Excel Siswa
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -133,30 +172,125 @@ export const StudentModule: React.FC = () => {
         return;
       }
 
-      // Map excel rows to Student objects
-      const imported: Omit<Student, 'id'>[] = json.map((row: any) => ({
-        full_name: row['Nama Lengkap'] || row['Nama'] || row['name'] || 'Siswa Baru',
-        nis: String(row['NIS'] || row['nis'] || Math.floor(100000 + Math.random() * 900000)),
-        nisn: String(row['NISN'] || row['nisn'] || Math.floor(1000000000 + Math.random() * 9000000000)),
-        gender: (row['Jenis Kelamin'] === 'P' || row['gender'] === 'P') ? 'P' : 'L',
-        class_name: row['Kelas'] || row['class'] || classes[0]?.name,
-        birth_place: row['Tempat Lahir'] || 'Jakarta',
-        birth_date: row['Tanggal Lahir'] || '2008-01-01',
-        religion: row['Agama'] || 'Islam',
-        father_name: row['Nama Ayah'] || '',
-        mother_name: row['Nama Ibu'] || '',
-        parent_phone: String(row['No HP Ortu'] || row['phone'] || ''),
-        enrollment_year: '2025',
-        status: 'aktif',
-        address: row['Alamat'] || '',
-      }));
+      const defaultClass = classes.find(c => c.id === selectedBulkClass)?.name || classes[0]?.name;
 
-      importStudents(imported);
+      const parsed: Omit<Student, 'id'>[] = json.map((row: any, idx: number) => {
+        const fullName = String(row['Nama Lengkap'] || row['Nama'] || row['name'] || '').trim();
+        const nis = String(row['NIS'] || row['nis'] || Math.floor(100000 + idx)).trim();
+        const nisn = String(row['NISN'] || row['nisn'] || Math.floor(1000000000 + idx)).trim();
+        const rawGender = String(row['Jenis Kelamin (L/P)'] || row['Jenis Kelamin'] || row['gender'] || 'L').trim().toUpperCase();
+        const gender: 'L' | 'P' = rawGender.startsWith('P') ? 'P' : 'L';
+        const className = String(row['Kelas'] || row['class'] || defaultClass || '').trim();
+        const matchedClass = classes.find(c => c.name.toLowerCase() === className.toLowerCase() || c.id === selectedBulkClass);
+        const username = generateUsername(fullName);
+
+        return {
+          full_name: fullName,
+          username,
+          password: '123@Siswa',
+          nis,
+          nisn,
+          gender,
+          class_id: matchedClass?.id,
+          class_name: matchedClass?.name || className,
+          birth_place: String(row['Tempat Lahir'] || 'Serang').trim(),
+          birth_date: String(row['Tanggal Lahir'] || '2009-01-01').trim(),
+          religion: 'Islam',
+          father_name: String(row['Nama Orang Tua / Wali'] || row['Nama Ayah'] || '').trim(),
+          mother_name: String(row['Nama Ibu'] || '').trim(),
+          parent_phone: String(row['No HP Ortu / WhatsApp'] || row['No HP Ortu'] || row['phone'] || '').trim(),
+          enrollment_year: '2025',
+          status: 'aktif' as const,
+          address: String(row['Alamat'] || 'Banten').trim(),
+        };
+      }).filter(s => s.full_name.length > 0);
+
+      if (parsed.length === 0) {
+        showToast('Data Kosong', 'Tidak ditemukan baris data siswa yang valid dalam file Excel.', 'error');
+        return;
+      }
+
+      setBulkPreview(parsed);
+      showToast('Pratinjau Siap', `Berhasil memuat ${parsed.length} data siswa dari file Excel.`);
     } catch (err: any) {
       showToast('Error Membaca Excel', err.message || 'Format file salah', 'error');
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
+  };
+
+  // Handler Parse Teks Salin-Tempel Siswa
+  const handleParsePaste = () => {
+    if (!pasteText.trim()) {
+      showToast('Teks Kosong', 'Silakan tempel (paste) data siswa terlebih dahulu.', 'error');
+      return;
+    }
+
+    const lines = pasteText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const parsed: Omit<Student, 'id'>[] = [];
+    const defaultClass = classes.find(c => c.id === selectedBulkClass)?.name || classes[0]?.name;
+
+    lines.forEach((line, idx) => {
+      let cols: string[] = [];
+      if (line.includes('\t')) {
+        cols = line.split('\t').map(c => c.trim());
+      } else if (line.includes(';')) {
+        cols = line.split(';').map(c => c.trim());
+      } else {
+        cols = line.split(',').map(c => c.trim());
+      }
+
+      const fullName = cols[0] || '';
+      if (!fullName) return;
+
+      const nis = cols[1] || String(Math.floor(100000 + idx));
+      const nisn = cols[2] || String(Math.floor(1000000000 + idx));
+      const rawGender = (cols[3] || 'L').toUpperCase();
+      const gender: 'L' | 'P' = rawGender.startsWith('P') ? 'P' : 'L';
+      const className = cols[4] || defaultClass || '';
+      const matchedClass = classes.find(c => c.name.toLowerCase() === className.toLowerCase() || c.id === selectedBulkClass);
+      const parentPhone = cols[5] || '';
+      const username = generateUsername(fullName);
+
+      parsed.push({
+        full_name: fullName,
+        username,
+        password: '123@Siswa',
+        nis,
+        nisn,
+        gender,
+        class_id: matchedClass?.id,
+        class_name: matchedClass?.name || className,
+        birth_place: 'Serang',
+        birth_date: '2009-01-01',
+        religion: 'Islam',
+        parent_phone: parentPhone,
+        enrollment_year: '2025',
+        status: 'aktif' as const,
+        address: 'Banten'
+      });
+    });
+
+    if (parsed.length === 0) {
+      showToast('Gagal Parsing', 'Format data tidak terbaca. Pastikan dipisahkan tanda koma atau tab.', 'error');
+      return;
+    }
+
+    setBulkPreview(parsed);
+    showToast('Pratinjau Siap', `Berhasil memproses ${parsed.length} baris siswa.`);
+  };
+
+  // Handler Simpan Data Masal Siswa
+  const handleSaveBulk = () => {
+    if (bulkPreview.length === 0) {
+      showToast('Data Kosong', 'Belum ada data siswa yang siap disimpan.', 'error');
+      return;
+    }
+
+    importStudents(bulkPreview);
+    setIsBulkModalOpen(false);
+    setBulkPreview([]);
+    setPasteText('');
   };
 
   const columns: Column<Student>[] = [
@@ -308,6 +442,18 @@ export const StudentModule: React.FC = () => {
         onAddClick={isAdmin ? handleOpenAdd : undefined}
         addButtonLabel="Tambah Siswa Baru"
         onBulkDelete={isAdmin ? (ids) => ids.forEach(deleteStudent) : undefined}
+        extraActions={
+          isAdmin ? (
+            <button
+              onClick={() => setIsBulkModalOpen(true)}
+              className="clay-btn-secondary text-xs sm:text-sm py-2 px-3.5 flex items-center gap-1.5"
+              title="Input data siswa secara masal via Excel atau Teks Salin-Tempel"
+            >
+              <Upload className="w-4 h-4 text-blue-600" />
+              <span>Input Masal Siswa</span>
+            </button>
+          ) : undefined
+        }
         filterComponent={
           <div className="flex items-center gap-2">
             <select
@@ -332,17 +478,6 @@ export const StudentModule: React.FC = () => {
               <option value="pindah">Pindah</option>
               <option value="keluar">Keluar</option>
             </select>
-
-            {isAdmin && (
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="clay-btn-secondary text-xs py-2 px-3 flex items-center gap-1.5"
-                title="Impor dari file Excel (.xlsx)"
-              >
-                <Upload className="w-3.5 h-3.5 text-blue-600" />
-                <span className="hidden sm:inline">Impor Excel</span>
-              </button>
-            )}
           </div>
         }
       />
@@ -678,6 +813,219 @@ export const StudentModule: React.FC = () => {
           </div>
         </Modal>
       )}
+
+      {/* Bulk Import Modal Siswa */}
+      <Modal
+        isOpen={isBulkModalOpen}
+        onClose={() => {
+          setIsBulkModalOpen(false);
+          setBulkPreview([]);
+          setPasteText('');
+        }}
+        title="Input Masal Data Siswa (Peserta Didik)"
+        subtitle="Tambah banyak siswa sekaligus dengan format Excel atau Salin-Tempel"
+        maxWidth="3xl"
+      >
+        <div className="space-y-5">
+          {/* Target Class Selection Helper */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-800 dark:text-white">
+                Kelas Default (Opsional)
+              </label>
+              <p className="text-[11px] text-slate-500">
+                Pilih rombel jika data yang diinput semuanya masuk ke satu kelas yang sama
+              </p>
+            </div>
+            <select
+              value={selectedBulkClass}
+              onChange={(e) => setSelectedBulkClass(e.target.value)}
+              className="text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-medium focus:outline-none"
+            >
+              <option value="">Otomatis Sesuai Kolom Data</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex border-b border-slate-200 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => setBulkTab('excel')}
+              className={`pb-3 px-4 text-xs font-bold transition-colors border-b-2 flex items-center gap-2 ${
+                bulkTab === 'excel'
+                  ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              Upload File Excel / CSV
+            </button>
+            <button
+              type="button"
+              onClick={() => setBulkTab('paste')}
+              className={`pb-3 px-4 text-xs font-bold transition-colors border-b-2 flex items-center gap-2 ${
+                bulkTab === 'paste'
+                  ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              <Clipboard className="w-4 h-4" />
+              Salin-Tempel (Copy-Paste)
+            </button>
+          </div>
+
+          {bulkTab === 'excel' ? (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/40 gap-3">
+                <div>
+                  <h4 className="text-xs font-bold text-blue-900 dark:text-blue-200">
+                    Gunakan Format Template Excel Siswa
+                  </h4>
+                  <p className="text-[11px] text-blue-700/80 dark:text-blue-300/80 mt-0.5">
+                    Download format template standar agar data siswa langsung terpetakan dengan benar.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDownloadTemplate}
+                  className="clay-btn-primary text-xs py-2 px-3.5 flex items-center gap-1.5 flex-shrink-0"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Unduh Template Excel</span>
+                </button>
+              </div>
+
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-blue-500 rounded-2xl p-7 text-center cursor-pointer transition-colors bg-slate-50/50 dark:bg-slate-800/30 group"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
+                  <Upload className="w-6 h-6" />
+                </div>
+                <p className="text-xs font-bold text-slate-800 dark:text-white">
+                  Klik untuk memilih file Excel (.xlsx / .csv)
+                </p>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Atau seret dan lepas file Excel data siswa ke sini
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40 text-[11px] text-amber-900 dark:text-amber-200">
+                <p className="font-bold flex items-center gap-1.5 mb-1">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                  Format baris yang didukung (Pisahkan dengan koma atau Tab dari Excel):
+                </p>
+                <p className="font-mono bg-white/70 dark:bg-black/30 p-2 rounded-xl text-[10px] text-slate-700 dark:text-slate-300">
+                  Nama Lengkap, NIS, NISN, Jenis Kelamin (L/P), Kelas, No HP Ortu
+                </p>
+                <p className="mt-1 text-slate-500 dark:text-slate-400 text-[10px]">
+                  Contoh: <span className="font-semibold">Ahmad Dani Pratama, 202510001, 0081234567, L, X-A, 081234567890</span>
+                </p>
+              </div>
+
+              <textarea
+                rows={6}
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                placeholder="Tempel (paste) baris data siswa dari Excel di sini..."
+                className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleParsePaste}
+                  className="clay-btn-primary text-xs py-2 px-4 flex items-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Proses Teks & Pratinjau</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Pratinjau Data Siswa yang Terbaca */}
+          {bulkPreview.length > 0 && (
+            <div className="space-y-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-white">
+                    Pratinjau Data ({bulkPreview.length} Siswa)
+                  </h4>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold">
+                    Siap Disimpan
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setBulkPreview([])}
+                  className="text-xs text-rose-600 hover:underline"
+                >
+                  Hapus Pratinjau
+                </button>
+              </div>
+
+              <div className="max-h-60 overflow-y-auto rounded-2xl border border-slate-200 dark:border-slate-700">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold sticky top-0">
+                    <tr>
+                      <th className="p-2.5">No</th>
+                      <th className="p-2.5">Nama Siswa</th>
+                      <th className="p-2.5">NIS / NISN</th>
+                      <th className="p-2.5">L/P</th>
+                      <th className="p-2.5">Kelas</th>
+                      <th className="p-2.5">Username Login</th>
+                      <th className="p-2.5">Password</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {bulkPreview.map((item, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                        <td className="p-2.5 text-slate-400 font-mono text-[10px]">{idx + 1}</td>
+                        <td className="p-2.5 font-bold text-slate-800 dark:text-white">{item.full_name}</td>
+                        <td className="p-2.5 text-slate-500 font-mono text-[11px]">
+                          {item.nis} / {item.nisn}
+                        </td>
+                        <td className="p-2.5 text-center font-bold text-blue-600">{item.gender}</td>
+                        <td className="p-2.5">
+                          <span className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                            {item.class_name || 'Umum'}
+                          </span>
+                        </td>
+                        <td className="p-2.5 font-mono text-[11px] text-blue-600 dark:text-blue-400 font-bold">
+                          {item.username}
+                        </td>
+                        <td className="p-2.5 font-mono text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">
+                          123@Siswa
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+                <p className="text-[11px] text-slate-500 italic">
+                  *Setiap siswa akan dibuatkan akun login otomatis dengan username di atas dan password default 123@Siswa.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleSaveBulk}
+                  className="clay-btn-primary text-xs py-2.5 px-5 flex items-center justify-center gap-2 shadow-emerald-500/20 bg-emerald-600 hover:bg-emerald-500"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Simpan Seluruh {bulkPreview.length} Data Siswa</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 };

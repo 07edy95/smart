@@ -89,6 +89,23 @@ export async function insertToHostinger(table: string, data: Record<string, any>
 }
 
 /**
+ * Menyimpan data masal (bulk) ke MySQL Hostinger
+ */
+export async function insertBulkToHostinger(table: string, dataArray: Record<string, any>[]): Promise<any> {
+  try {
+    const res = await fetch(`/api/data.php?table=${encodeURIComponent(table)}&action=bulk_insert`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dataArray)
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn(`[Hostinger MySQL] Gagal bulk insert data ke tabel ${table}:`, e);
+    return null;
+  }
+}
+
+/**
  * Mengupdate data di MySQL Hostinger
  */
 export async function updateInHostinger(table: string, id: string, data: Record<string, any>): Promise<any> {
