@@ -9,29 +9,17 @@ export const GradeModule: React.FC = () => {
   const { 
     classes, subjects, students, gradeComponents, 
     addGradeComponent, grades, recordGrade, bulkRecordGrades, 
-    role, teacherProfile, studentProfile, schedules, currentUser, showToast 
+    role, teacherProfile, studentProfile, schedules, currentUser, showToast,
+    teacherSubjects, teacherClasses 
   } = useApp();
 
   const isSiswa = role === 'siswa';
   const isAdmin = role === 'admin';
   const isGuru = role === 'guru';
 
-  // Guru-filtered classes & subjects
-  const teacherClassIds = schedules
-    .filter(s => (teacherProfile && s.teacher_id === teacherProfile.id) || s.teacher_name === teacherProfile?.full_name)
-    .map(s => s.class_id);
-  
-  const accessibleClasses = isGuru
-    ? (classes.filter(c => teacherClassIds.includes(c.id) || (teacherProfile && c.homeroom_teacher_id === teacherProfile.id)).length > 0
-        ? classes.filter(c => teacherClassIds.includes(c.id) || (teacherProfile && c.homeroom_teacher_id === teacherProfile.id))
-        : classes)
-    : classes;
-
-  const accessibleSubjects = isGuru
-    ? (subjects.filter(s => schedules.some(sch => sch.subject_id === s.id && ((teacherProfile && sch.teacher_id === teacherProfile.id) || sch.teacher_name === teacherProfile?.full_name))).length > 0
-        ? subjects.filter(s => schedules.some(sch => sch.subject_id === s.id && ((teacherProfile && sch.teacher_id === teacherProfile.id) || sch.teacher_name === teacherProfile?.full_name)))
-        : subjects)
-    : subjects;
+  // Guru-filtered classes & subjects (Hanya mapel & kelas yang diampu)
+  const accessibleClasses = isGuru ? teacherClasses : classes;
+  const accessibleSubjects = isGuru ? teacherSubjects : subjects;
 
   const [selectedClassId, setSelectedClassId] = useState<string>(accessibleClasses[0]?.id || '');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(accessibleSubjects[0]?.id || '');
@@ -343,22 +331,33 @@ export const GradeModule: React.FC = () => {
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-              Pilih Mata Pelajaran
+              Pilih Mata Pelajaran {isGuru && <span className="text-[10px] text-emerald-600 font-normal">(Diampu)</span>}
             </label>
-            <select
-              value={selectedSubjectId}
-              onChange={(e) => setSelectedSubjectId(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none"
-            >
-              {accessibleSubjects.map((s) => (
-                <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
-              ))}
-            </select>
+            {accessibleSubjects.length > 0 ? (
+              <select
+                value={selectedSubjectId}
+                onChange={(e) => setSelectedSubjectId(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none"
+              >
+                {accessibleSubjects.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+                ))}
+              </select>
+            ) : (
+              <div className="px-3.5 py-2.5 rounded-xl border border-dashed border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/20 text-xs text-amber-700 dark:text-amber-300">
+                Belum ada mata pelajaran yang diampu.
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       {/* Leger Nilai Matrix Table */}
+      {accessibleSubjects.length === 0 ? (
+        <div className="clay-card p-8 text-center text-slate-400 text-sm">
+          Belum ada mata pelajaran yang diampu oleh akun Anda. Hubungi Administrator untuk menetapkan pengampu mata pelajaran.
+        </div>
+      ) : (
       <div className="clay-card p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="font-bold text-base text-slate-900 dark:text-white">
@@ -454,6 +453,7 @@ export const GradeModule: React.FC = () => {
           </table>
         </div>
       </div>
+      )}
 
       {/* Component & Weight Config Modal */}
       <Modal

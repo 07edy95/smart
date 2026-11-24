@@ -9,22 +9,49 @@ import { BookOpen, Plus, Download, Trash2, FileText, Video, Presentation } from 
 export const LearningMaterialModule: React.FC = () => {
   const { 
     learningMaterials, addLearningMaterial, deleteLearningMaterial, 
-    classes, subjects, teachers, role, teacherProfile 
+    classes, subjects, teachers, role, teacherProfile,
+    teacherSubjects, teacherClasses 
   } = useApp();
+
+  const isSiswa = role === 'siswa';
+  const isAdmin = role === 'admin';
+  const isGuru = role === 'guru';
+
+  // Guru-filtered classes & subjects (Hanya mapel & kelas yang diampu)
+  const accessibleClasses = isGuru ? teacherClasses : classes;
+  const accessibleSubjects = isGuru ? teacherSubjects : subjects;
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<'Modul' | 'Buku Paket' | 'Video' | 'Slide' | 'Latihan'>('Modul');
-  const [classId, setClassId] = useState(classes[0]?.id || '');
-  const [subjectId, setSubjectId] = useState(subjects[0]?.id || '');
+  const [classId, setClassId] = useState(accessibleClasses[0]?.id || '');
+  const [subjectId, setSubjectId] = useState(accessibleSubjects[0]?.id || '');
   const [fileUrl, setFileUrl] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  const isSiswa = role === 'siswa';
-  const isAdmin = role === 'admin';
-  const isGuru = role === 'guru';
+  // Sync classId & subjectId saat accessible berubah
+  React.useEffect(() => {
+    if (accessibleClasses.length > 0 && !accessibleClasses.some(c => c.id === classId)) {
+      setClassId(accessibleClasses[0].id);
+    }
+  }, [accessibleClasses, classId]);
+
+  React.useEffect(() => {
+    if (accessibleSubjects.length > 0 && !accessibleSubjects.some(s => s.id === subjectId)) {
+      setSubjectId(accessibleSubjects[0].id);
+    }
+  }, [accessibleSubjects, subjectId]);
+
+  // Filter materials per role
+  const displayedMaterials = isGuru
+    ? learningMaterials.filter(m => 
+        (teacherProfile && m.teacher_id === teacherProfile.id) ||
+        m.teacher_name === teacherProfile?.full_name ||
+        accessibleSubjects.some(s => s.id === m.subject_id)
+      )
+    : learningMaterials;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,7 +160,7 @@ export const LearningMaterialModule: React.FC = () => {
       <DataTable
         title="Materi Pembelajaran & E-Book"
         subtitle="Katalog modul belajar, presentasi slide, rekaman video, dan bahan pengayaan"
-        data={learningMaterials}
+        data={displayedMaterials}
         columns={columns}
         searchPlaceholder="Cari materi, modul, mata pelajaran..."
         searchKeys={['title', 'description', 'category', 'subject_name']}
@@ -183,18 +210,24 @@ export const LearningMaterialModule: React.FC = () => {
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Mata Pelajaran *
+                Mata Pelajaran * {isGuru && <span className="text-[10px] text-emerald-600 font-normal">(Diampu)</span>}
               </label>
-              <select
-                value={subjectId}
-                onChange={(e) => setSubjectId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none"
-                required
-              >
-                {subjects.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
+              {accessibleSubjects.length > 0 ? (
+                <select
+                  value={subjectId}
+                  onChange={(e) => setSubjectId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none"
+                  required
+                >
+                  {accessibleSubjects.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+                  ))}
+                </select>
+              ) : (
+                <div className="px-3 py-2 rounded-xl border border-dashed border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/20 text-xs text-amber-700 dark:text-amber-300">
+                  Belum ada mapel diampu.
+                </div>
+              )}
             </div>
           </div>
 
@@ -208,7 +241,7 @@ export const LearningMaterialModule: React.FC = () => {
               className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none"
             >
               <option value="">Semua Kelas</option>
-              {classes.map((c) => (
+              {accessibleClasses.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>

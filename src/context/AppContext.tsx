@@ -43,6 +43,8 @@ interface AppContextType {
   teacherProfile: Teacher | null;
   studentProfile: Student | null;
   role: UserRole;
+  teacherSubjects: Subject[];
+  teacherClasses: ClassRoom[];
   login: (email: string, password?: string, preferredRole?: UserRole) => Promise<boolean>;
   logout: () => void;
   switchRole: (role: UserRole) => void;
@@ -284,6 +286,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     (currentUser?.full_name && s.full_name && s.full_name.toLowerCase() === currentUser.full_name.toLowerCase()) ||
     (currentUser?.username && generateUsername(s.full_name) === currentUser.username.toLowerCase())
   ) || null;
+
+  // Filter mata pelajaran yang diampu oleh guru yang sedang login (Single Source of Truth)
+  const teacherSubjects = React.useMemo(() => {
+    if (role !== 'guru') return subjects;
+    const tId = teacherProfile?.id;
+    const tName = (teacherProfile?.full_name || currentUser?.full_name || '').toLowerCase().trim();
+
+    return subjects.filter(s => {
+      // 1. Cek langsung di data subject: teacher_id atau teacher_name
+      if (tId && s.teacher_id === tId) return true;
+      if (tName && s.teacher_name && s.teacher_name.toLowerCase().trim() === tName) return true;
+      // 2. Cek di jadwal pelajaran (schedules): apakah guru dijadwalkan mengajar mapel ini
+      const hasSchedule = schedules.some(sch => 
+        sch.subject_id === s.id && 
+        ((tId && sch.teacher_id === tId) || (tName && sch.teacher_name && sch.teacher_name.toLowerCase().trim() === tName))
+      );
+      return hasSchedule;
+    });
+  }, [role, teacherProfile, currentUser, subjects, schedules]);
+
+  // Filter kelas / rombel yang diampu oleh guru (sebagai wali kelas atau guru mata pelajaran)
+  const teacherClasses = React.useMemo(() => {
+    if (role !== 'guru') return classes;
+    const tId = teacherProfile?.id;
+    const tName = (teacherProfile?.full_name || currentUser?.full_name || '').toLowerCase().trim();
+
+    const classIdsInSchedule = schedules
+      .filter(s => (tId && s.teacher_id === tId) || (tName && s.teacher_name && s.teacher_name.toLowerCase().trim() === tName))
+      .map(s => s.class_id);
+
+    return classes.filter(c => 
+      classIdsInSchedule.includes(c.id) || 
+      (tId && c.homeroom_teacher_id === tId) ||
+      (tName && c.homeroom_teacher_name && c.homeroom_teacher_name.toLowerCase().trim() === tName)
+    );
+  }, [role, teacherProfile, currentUser, classes, schedules]);
 
   // Auto-update school name & NPSN if cached with old sample data
   useEffect(() => {
@@ -1804,6 +1842,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       teacherProfile,
       studentProfile,
       role,
+      teacherSubjects,
+      teacherClasses,
       login,
       logout,
       switchRole,

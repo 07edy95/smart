@@ -15,33 +15,25 @@ export const AssignmentModule: React.FC = () => {
     assignments, addAssignment, deleteAssignment, 
     submissions, submitAssignment, gradeSubmission, 
     classes, subjects, teachers, schedules, role, currentUser, 
-    studentProfile, teacherProfile, showToast 
+    studentProfile, teacherProfile, showToast,
+    teacherSubjects, teacherClasses 
   } = useApp();
 
   const isSiswa = role === 'siswa';
   const isAdmin = role === 'admin';
   const isGuru = role === 'guru';
 
-  // Guru-filtered classes & subjects
-  const teacherClassIds = schedules
-    .filter(s => (teacherProfile && s.teacher_id === teacherProfile.id) || s.teacher_name === teacherProfile?.full_name)
-    .map(s => s.class_id);
-  
-  const accessibleClasses = isGuru
-    ? (classes.filter(c => teacherClassIds.includes(c.id) || (teacherProfile && c.homeroom_teacher_id === teacherProfile.id)).length > 0
-        ? classes.filter(c => teacherClassIds.includes(c.id) || (teacherProfile && c.homeroom_teacher_id === teacherProfile.id))
-        : classes)
-    : classes;
-
-  const accessibleSubjects = isGuru
-    ? (subjects.filter(s => schedules.some(sch => sch.subject_id === s.id && ((teacherProfile && sch.teacher_id === teacherProfile.id) || sch.teacher_name === teacherProfile?.full_name))).length > 0
-        ? subjects.filter(s => schedules.some(sch => sch.subject_id === s.id && ((teacherProfile && sch.teacher_id === teacherProfile.id) || sch.teacher_name === teacherProfile?.full_name)))
-        : subjects)
-    : subjects;
+  // Guru-filtered classes & subjects (Hanya mapel & kelas yang diampu)
+  const accessibleClasses = isGuru ? teacherClasses : classes;
+  const accessibleSubjects = isGuru ? teacherSubjects : subjects;
 
   // Filter assignments strictly per role: Guru A cannot see Guru B's assignments; Siswa only sees their class
   const filteredAssignments = isGuru
-    ? assignments.filter(a => (teacherProfile && a.teacher_id === teacherProfile.id) || a.teacher_name === teacherProfile?.full_name)
+    ? assignments.filter(a => 
+        (teacherProfile && a.teacher_id === teacherProfile.id) || 
+        a.teacher_name === teacherProfile?.full_name ||
+        accessibleSubjects.some(s => s.id === a.subject_id)
+      )
     : isSiswa
     ? assignments.filter(a => (studentProfile?.class_id && a.class_id === studentProfile.class_id) || !a.class_id)
     : assignments;
@@ -317,18 +309,24 @@ export const AssignmentModule: React.FC = () => {
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Mata Pelajaran *
+                Mata Pelajaran * {isGuru && <span className="text-[10px] text-emerald-600 font-normal">(Diampu)</span>}
               </label>
-              <select
-                value={subjectId}
-                onChange={(e) => setSubjectId(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none"
-                required
-              >
-                {accessibleSubjects.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
+              {accessibleSubjects.length > 0 ? (
+                <select
+                  value={subjectId}
+                  onChange={(e) => setSubjectId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none"
+                  required
+                >
+                  {accessibleSubjects.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+                  ))}
+                </select>
+              ) : (
+                <div className="px-3.5 py-2.5 rounded-xl border border-dashed border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/20 text-xs text-amber-700 dark:text-amber-300">
+                  Belum ada mata pelajaran yang diampu.
+                </div>
+              )}
             </div>
           </div>
 

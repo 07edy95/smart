@@ -21,6 +21,7 @@ export const SubjectModule: React.FC = () => {
     role, 
     currentUser, 
     teacherProfile,
+    teacherSubjects,
     showToast 
   } = useApp();
 
@@ -54,18 +55,7 @@ export const SubjectModule: React.FC = () => {
   const myTeacherId = teacherProfile?.id;
 
   // Filter mapel: jika guru yang login, hanya tampilkan mata pelajaran yang diajarkan oleh guru bersangkutan
-  const displayedSubjects = isAdmin
-    ? subjects
-    : subjects.filter((s) => {
-        if (myTeacherId && s.teacher_id === myTeacherId) return true;
-        if (
-          s.teacher_name &&
-          myTeacherName &&
-          s.teacher_name.toLowerCase().trim() === myTeacherName.toLowerCase().trim()
-        )
-          return true;
-        return false;
-      });
+  const displayedSubjects = isAdmin ? subjects : teacherSubjects;
 
   const handleOpenAdd = () => {
     setSelectedSubject(null);

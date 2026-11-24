@@ -13,29 +13,17 @@ export const AttendanceModule: React.FC = () => {
     classes, subjects, students, teachers, schedules,
     studentAttendance, recordStudentAttendance, 
     teacherAttendance, recordTeacherAttendance, 
-    role, currentUser, studentProfile, teacherProfile 
+    role, currentUser, studentProfile, teacherProfile,
+    teacherSubjects, teacherClasses 
   } = useApp();
 
   const isSiswa = role === 'siswa';
   const isGuru = role === 'guru';
   const isAdmin = role === 'admin';
 
-  // Guru accessible classes & subjects
-  const teacherClassIds = schedules
-    .filter(s => (teacherProfile && s.teacher_id === teacherProfile.id) || s.teacher_name === teacherProfile?.full_name)
-    .map(s => s.class_id);
-  
-  const accessibleClasses = isGuru
-    ? (classes.filter(c => teacherClassIds.includes(c.id) || (teacherProfile && c.homeroom_teacher_id === teacherProfile.id)).length > 0
-        ? classes.filter(c => teacherClassIds.includes(c.id) || (teacherProfile && c.homeroom_teacher_id === teacherProfile.id))
-        : classes)
-    : classes;
-
-  const accessibleSubjects = isGuru
-    ? (subjects.filter(s => schedules.some(sch => sch.subject_id === s.id && ((teacherProfile && sch.teacher_id === teacherProfile.id) || sch.teacher_name === teacherProfile?.full_name))).length > 0
-        ? subjects.filter(s => schedules.some(sch => sch.subject_id === s.id && ((teacherProfile && sch.teacher_id === teacherProfile.id) || sch.teacher_name === teacherProfile?.full_name)))
-        : subjects)
-    : subjects;
+  // Guru accessible classes & subjects (Hanya mapel & kelas yang diampu)
+  const accessibleClasses = isGuru ? teacherClasses : classes;
+  const accessibleSubjects = isGuru ? teacherSubjects : subjects;
 
   const [activeTab, setActiveTab] = useState<'siswa' | 'guru' | 'rekap'>('siswa');
 
@@ -126,13 +114,18 @@ export const AttendanceModule: React.FC = () => {
 
   const handleSaveStudentAttendance = (e: React.FormEvent) => {
     e.preventDefault();
+    const currentSub = accessibleSubjects.find(s => s.id === selectedSubjectId) || subjects.find(s => s.id === selectedSubjectId);
+    const currentCls = accessibleClasses.find(c => c.id === selectedClassId) || classes.find(c => c.id === selectedClassId);
+
     const records = classStudents.map((std) => {
       const entry = attendanceMap[std.id] || { status: 'hadir', notes: '' };
       return {
         student_id: std.id,
         student_name: std.full_name,
         class_id: selectedClassId,
+        class_name: currentCls?.name,
         subject_id: selectedSubjectId,
+        subject_name: currentSub?.name,
         date: attendanceDate,
         status: entry.status,
         notes: entry.notes,
@@ -354,17 +347,23 @@ export const AttendanceModule: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Mata Pelajaran
+                  Mata Pelajaran {isGuru && <span className="text-[10px] text-emerald-600 font-normal">(Diampu)</span>}
                 </label>
-                <select
-                  value={selectedSubjectId}
-                  onChange={(e) => setSelectedSubjectId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none"
-                >
-                  {accessibleSubjects.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
+                {accessibleSubjects.length > 0 ? (
+                  <select
+                    value={selectedSubjectId}
+                    onChange={(e) => setSelectedSubjectId(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none"
+                  >
+                    {accessibleSubjects.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="px-3.5 py-2.5 rounded-xl border border-dashed border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/20 text-xs text-amber-700 dark:text-amber-300">
+                    Belum ada mata pelajaran yang diampu.
+                  </div>
+                )}
               </div>
 
               <div>
@@ -607,8 +606,8 @@ export const AttendanceModule: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {teacherAttendance.length > 0 ? (
-                    teacherAttendance.map((ta) => (
+                  {((isGuru && teacherProfile) ? teacherAttendance.filter(ta => ta.teacher_id === teacherProfile.id) : teacherAttendance).length > 0 ? (
+                    ((isGuru && teacherProfile) ? teacherAttendance.filter(ta => ta.teacher_id === teacherProfile.id) : teacherAttendance).map((ta) => (
                       <tr key={ta.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                         <td className="p-3 font-bold text-slate-900 dark:text-white">{ta.teacher_name}</td>
                         <td className="p-3">{formatDate(ta.date)}</td>
@@ -639,7 +638,7 @@ export const AttendanceModule: React.FC = () => {
       {activeTab === 'rekap' && (
         <div className="clay-card p-6 space-y-4">
           <h3 className="font-bold text-base text-slate-900 dark:text-white">
-            Log Riwayat Presensi Lengkap
+            Log Riwayat Presensi Lengkap {isGuru && '(Mata Pelajaran Diampu)'}
           </h3>
 
           <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
@@ -654,12 +653,12 @@ export const AttendanceModule: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {(isGuru ? studentAttendance.filter(a => accessibleClasses.some(c => c.id === a.class_id)) : studentAttendance).length > 0 ? (
-                  (isGuru ? studentAttendance.filter(a => accessibleClasses.some(c => c.id === a.class_id)) : studentAttendance).map((rec) => (
+                {(isGuru ? studentAttendance.filter(a => accessibleSubjects.some(s => s.id === a.subject_id || s.name === a.subject_name)) : studentAttendance).length > 0 ? (
+                  (isGuru ? studentAttendance.filter(a => accessibleSubjects.some(s => s.id === a.subject_id || s.name === a.subject_name)) : studentAttendance).map((rec) => (
                   <tr key={rec.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                     <td className="p-3 font-semibold text-slate-900 dark:text-white">{rec.student_name}</td>
                     <td className="p-3">{formatDate(rec.date)}</td>
-                    <td className="p-3 text-slate-500">{rec.subject_name || 'Matematika'}</td>
+                    <td className="p-3 text-slate-500">{rec.subject_name || '-'}</td>
                     <td className="p-3">
                       <span
                         className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] capitalize ${

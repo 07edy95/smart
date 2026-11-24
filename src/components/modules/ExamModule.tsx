@@ -7,20 +7,42 @@ import { formatDate, exportToPdf } from '../../utils/helpers';
 import { FileText, Plus, Trash2, Printer, Calendar, Clock, MapPin, Users } from 'lucide-react';
 
 export const ExamModule: React.FC = () => {
-  const { exams, addExam, deleteExam, subjects, teachers, classes, role } = useApp();
+  const { 
+    exams, addExam, deleteExam, subjects, teachers, classes, role, 
+    teacherProfile, teacherSubjects 
+  } = useApp();
+
+  const isAdmin = role === 'admin';
+  const isGuru = role === 'guru';
+
+  // Guru accessible subjects (Hanya mapel yang diampu)
+  const accessibleSubjects = isGuru ? teacherSubjects : subjects;
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [type, setType] = useState<'harian' | 'sumatif' | 'uts' | 'uas'>('uts');
-  const [subjectId, setSubjectId] = useState(subjects[0]?.id || '');
-  const [date, setDate] = useState('2025-10-06');
+  const [subjectId, setSubjectId] = useState(accessibleSubjects[0]?.id || '');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [startTime, setStartTime] = useState('07:30');
   const [endTime, setEndTime] = useState('09:30');
-  const [supervisorTeacherId, setSupervisorTeacherId] = useState(teachers[0]?.id || '');
+  const [supervisorTeacherId, setSupervisorTeacherId] = useState(teacherProfile?.id || teachers[0]?.id || '');
   const [room, setRoom] = useState('Lab Komputer 1');
 
-  const isAdmin = role === 'admin';
-  const isGuru = role === 'guru';
+  // Sync subjectId saat accessibleSubjects berubah
+  React.useEffect(() => {
+    if (accessibleSubjects.length > 0 && !accessibleSubjects.some(s => s.id === subjectId)) {
+      setSubjectId(accessibleSubjects[0].id);
+    }
+  }, [accessibleSubjects, subjectId]);
+
+  // Filter exams per role
+  const displayedExams = isGuru
+    ? exams.filter(e => 
+        (teacherProfile && e.supervisor_teacher_id === teacherProfile.id) ||
+        e.supervisor_name === teacherProfile?.full_name ||
+        accessibleSubjects.some(s => s.id === e.subject_id)
+      )
+    : exams;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,7 +162,7 @@ export const ExamModule: React.FC = () => {
       <DataTable
         title="Manajemen Ujian & Evaluasi Pembelajaran"
         subtitle="Jadwal PTS, PAS, asesmen sumatif, pengawas ruang, dan cetak berita acara ujian"
-        data={exams}
+        data={displayedExams}
         columns={columns}
         searchPlaceholder="Cari ujian, mata pelajaran, ruang..."
         searchKeys={['title', 'subject_name', 'room', 'supervisor_name']}
@@ -189,18 +211,24 @@ export const ExamModule: React.FC = () => {
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Mata Pelajaran *
+                Mata Pelajaran * {isGuru && <span className="text-[10px] text-emerald-600 font-normal">(Diampu)</span>}
               </label>
-              <select
-                value={subjectId}
-                onChange={(e) => setSubjectId(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none"
-                required
-              >
-                {subjects.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
+              {accessibleSubjects.length > 0 ? (
+                <select
+                  value={subjectId}
+                  onChange={(e) => setSubjectId(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none"
+                  required
+                >
+                  {accessibleSubjects.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+                  ))}
+                </select>
+              ) : (
+                <div className="px-3.5 py-2 rounded-xl border border-dashed border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/20 text-xs text-amber-700 dark:text-amber-300">
+                  Belum ada mapel diampu.
+                </div>
+              )}
             </div>
           </div>
 

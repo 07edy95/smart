@@ -6,7 +6,10 @@ import { ClassRoom } from '../../types/database';
 import { DoorOpen, Eye, Edit3, Trash2, Users, GraduationCap } from 'lucide-react';
 
 export const ClassModule: React.FC = () => {
-  const { classes, addClass, updateClass, deleteClass, bulkDeleteClasses, teachers, students, role } = useApp();
+  const { 
+    classes, addClass, updateClass, deleteClass, bulkDeleteClasses, 
+    teachers, students, role, teacherProfile, studentProfile, teacherClasses 
+  } = useApp();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -22,6 +25,14 @@ export const ClassModule: React.FC = () => {
   });
 
   const isAdmin = role === 'admin';
+  const isGuru = role === 'guru';
+  const isSiswa = role === 'siswa';
+
+  const displayedClasses = isAdmin 
+    ? classes 
+    : isGuru 
+    ? teacherClasses 
+    : classes.filter(c => c.id === studentProfile?.class_id);
 
   const handleOpenAdd = () => {
     setSelectedClass(null);
@@ -138,9 +149,15 @@ export const ClassModule: React.FC = () => {
   return (
     <div className="space-y-6">
       <DataTable
-        title="Rombongan Belajar (Rombel / Kelas)"
-        subtitle="Daftar kelas aktif, wali kelas pengampu, dan kapasitas peserta didik"
-        data={classes}
+        title={isGuru ? "Kelas & Rombel yang Diampu" : isSiswa ? "Informasi Kelas Anda" : "Rombongan Belajar (Rombel / Kelas)"}
+        subtitle={
+          isGuru 
+            ? `Daftar kelas yang diajar atau dibimbing (${teacherProfile?.full_name || 'Bapak/Ibu Guru'})` 
+            : isSiswa 
+            ? "Informasi rombel dan daftar rekan sekelas Anda" 
+            : "Daftar kelas aktif, wali kelas pengampu, dan kapasitas peserta didik"
+        }
+        data={displayedClasses}
         columns={columns}
         searchPlaceholder="Cari nama rombel, wali kelas..."
         searchKeys={['name', 'code', 'homeroom_teacher_name', 'major']}
