@@ -131,6 +131,9 @@ export interface Subject {
   category: 'Wajib' | 'Peminatan' | 'Muatan Lokal' | 'Pilihan';
   hours_per_week: number;
   grade_level: string;
+  teacher_id?: string;
+  teacher_name?: string;
+  passing_grade?: number;
   created_at?: string;
   updated_at?: string;
 }

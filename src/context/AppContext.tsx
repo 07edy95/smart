@@ -81,6 +81,7 @@ interface AppContextType {
   addSubject: (data: Omit<Subject, 'id'>) => void;
   updateSubject: (id: string, data: Partial<Subject>) => void;
   deleteSubject: (id: string) => void;
+  importSubjects: (subjectsList: Omit<Subject, 'id'>[]) => void;
 
   schedules: Schedule[];
   addSchedule: (data: Omit<Schedule, 'id'>) => { success: boolean; message?: string };
@@ -159,6 +160,8 @@ interface AppContextType {
 
   // Data management
   clearAllDummyData: () => void;
+  getBackupData: () => Record<string, any>;
+  restoreDatabase: (backupData: any) => { success: boolean; message: string };
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -327,6 +330,163 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     showToast('Data Contoh Dihapus', 'Seluruh data dummy berhasil dibersihkan dari sistem.', 'success');
+  };
+
+  // Cadangkan Data (Backup) & Pulihkan Data (Restore)
+  const getBackupData = () => {
+    return {
+      version: '1.0.0',
+      exported_at: new Date().toISOString(),
+      school_name: schoolSettings.school_name,
+      school_settings: schoolSettings,
+      academic_years: academicYears,
+      semesters: semesters,
+      classes: classes,
+      teachers: teachers,
+      students: students,
+      profiles: profiles,
+      subjects: subjects,
+      schedules: schedules,
+      student_attendance: studentAttendance,
+      teacher_attendance: teacherAttendance,
+      grade_components: gradeComponents,
+      grades: grades,
+      assignments: assignments,
+      submissions: submissions,
+      learning_materials: learningMaterials,
+      exams: exams,
+      announcements: announcements,
+      events: events,
+      inventory: inventory,
+      inventory_loans: inventoryLoans,
+      incoming_letters: incomingLetters,
+      outgoing_letters: outgoingLetters,
+      payment_types: paymentTypes,
+      student_bills: studentBills,
+      transactions: transactions,
+    };
+  };
+
+  const restoreDatabase = (backupData: any): { success: boolean; message: string } => {
+    try {
+      if (!backupData || typeof backupData !== 'object') {
+        throw new Error('Format file cadangan tidak valid.');
+      }
+
+      let restoredCount = 0;
+
+      if (backupData.school_settings) {
+        setSchoolSettings(backupData.school_settings);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.academic_years)) {
+        setAcademicYears(backupData.academic_years);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.semesters)) {
+        setSemesters(backupData.semesters);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.classes)) {
+        setClasses(backupData.classes);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.teachers)) {
+        setTeachers(backupData.teachers);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.students)) {
+        setStudents(backupData.students);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.profiles)) {
+        setProfiles(backupData.profiles);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.subjects)) {
+        setSubjects(backupData.subjects);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.schedules)) {
+        setSchedules(backupData.schedules);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.student_attendance)) {
+        setStudentAttendance(backupData.student_attendance);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.teacher_attendance)) {
+        setTeacherAttendance(backupData.teacher_attendance);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.grade_components)) {
+        setGradeComponents(backupData.grade_components);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.grades)) {
+        setGrades(backupData.grades);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.assignments)) {
+        setAssignments(backupData.assignments);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.submissions)) {
+        setSubmissions(backupData.submissions);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.learning_materials)) {
+        setLearningMaterials(backupData.learning_materials);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.exams)) {
+        setExams(backupData.exams);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.announcements)) {
+        setAnnouncements(backupData.announcements);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.events)) {
+        setEvents(backupData.events);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.inventory)) {
+        setInventory(backupData.inventory);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.inventory_loans)) {
+        setInventoryLoans(backupData.inventory_loans);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.incoming_letters)) {
+        setIncomingLetters(backupData.incoming_letters);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.outgoing_letters)) {
+        setOutgoingLetters(backupData.outgoing_letters);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.payment_types)) {
+        setPaymentTypes(backupData.payment_types);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.student_bills)) {
+        setStudentBills(backupData.student_bills);
+        restoredCount++;
+      }
+      if (Array.isArray(backupData.transactions)) {
+        setTransactions(backupData.transactions);
+        restoredCount++;
+      }
+
+      logAction('RESTORE', 'Pengaturan Sistem', `Memulihkan database dari cadangan (${restoredCount} kumpulan data dipulihkan)`);
+      showToast('Pemulihan Berhasil', `Berhasil memulihkan ${restoredCount} kumpulan data sistem.`);
+      return { success: true, message: `Berhasil memulihkan ${restoredCount} modul data sistem.` };
+    } catch (err: any) {
+      showToast('Pemulihan Gagal', err?.message || 'Gagal memulihkan file cadangan.', 'error');
+      return { success: false, message: err?.message || 'Gagal memulihkan file cadangan.' };
+    }
   };
 
   // Otomatis bersihkan jika terdeteksi data dummy lama di browser
@@ -812,13 +972,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Subjects Management
   const addSubject = (data: Omit<Subject, 'id'>) => {
     const id = 'sbj-' + Date.now();
-    setSubjects(prev => [...prev, { ...data, id }]);
+    const teacher = teachers.find(t => t.id === data.teacher_id);
+    const newSubject: Subject = {
+      ...data,
+      id,
+      teacher_name: teacher ? teacher.full_name : data.teacher_name,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    setSubjects(prev => [...prev, newSubject]);
     logAction('CREATE', 'Mata Pelajaran', `Menambah mata pelajaran: ${data.name}`);
     showToast('Berhasil', `Mata pelajaran ${data.name} berhasil ditambahkan.`);
   };
 
   const updateSubject = (id: string, data: Partial<Subject>) => {
-    setSubjects(prev => prev.map(s => s.id === id ? { ...s, ...data } : s));
+    const teacher = data.teacher_id ? teachers.find(t => t.id === data.teacher_id) : undefined;
+    setSubjects(prev => prev.map(s => s.id === id ? {
+      ...s,
+      ...data,
+      teacher_name: teacher ? teacher.full_name : (data.teacher_name !== undefined ? data.teacher_name : s.teacher_name),
+      updated_at: new Date().toISOString()
+    } : s));
     logAction('UPDATE', 'Mata Pelajaran', `Memperbarui mata pelajaran ${id}`);
     showToast('Berhasil', 'Data mata pelajaran berhasil disimpan.');
   };
@@ -827,6 +1001,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSubjects(prev => prev.filter(s => s.id !== id));
     logAction('DELETE', 'Mata Pelajaran', `Menghapus mata pelajaran ${id}`);
     showToast('Dihapus', 'Mata pelajaran berhasil dihapus.');
+  };
+
+  const importSubjects = (subjectsList: Omit<Subject, 'id'>[]) => {
+    const newSubjects: Subject[] = subjectsList.map((item, index) => {
+      const id = 'sbj-' + Date.now() + '-' + index;
+      const matchedTeacher = teachers.find(t => 
+        (item.teacher_id && t.id === item.teacher_id) || 
+        (item.teacher_name && t.full_name.toLowerCase().trim() === item.teacher_name.toLowerCase().trim())
+      );
+
+      return {
+        ...item,
+        id,
+        teacher_id: matchedTeacher?.id || item.teacher_id,
+        teacher_name: matchedTeacher?.full_name || item.teacher_name,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+    });
+
+    setSubjects(prev => [...prev, ...newSubjects]);
+    logAction('IMPORT', 'Mata Pelajaran', `Mengimpor ${newSubjects.length} mata pelajaran`);
+    showToast('Impor Sukses', `Berhasil mengimpor ${newSubjects.length} mata pelajaran.`);
   };
 
   // Schedule with Conflict Validation!
@@ -1317,6 +1514,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addSubject,
       updateSubject,
       deleteSubject,
+      importSubjects,
       schedules,
       addSchedule,
       updateSchedule,
@@ -1372,7 +1570,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       markNotificationRead,
       activityLogs,
       logAction,
-      clearAllDummyData
+      clearAllDummyData,
+      getBackupData,
+      restoreDatabase
     }}>
       {children}
     </AppContext.Provider>

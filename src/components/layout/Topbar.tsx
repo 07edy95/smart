@@ -19,7 +19,7 @@ export const Topbar: React.FC<TopbarProps> = ({
   onOpenProfile,
 }) => {
   const { 
-    currentUser, role, switchRole, logout, theme, 
+    currentUser, role, logout, theme, 
     toggleTheme, isSupabaseLive, schoolSettings, 
     academicYears, semesters, notifications, markNotificationRead 
   } = useApp();
@@ -56,23 +56,12 @@ export const Topbar: React.FC<TopbarProps> = ({
         </div>
       </div>
 
-      {/* Right: Quick Role Switcher, Database Status, Theme Toggle, Notification & Profile */}
+      {/* Right: Locked Role Badge, Database Status, Theme Toggle, Notification & Profile */}
       <div className="flex items-center gap-2 sm:gap-3">
-        {/* Quick Demo Role Switcher */}
-        <div className="hidden md:flex items-center p-1 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200/60 dark:border-slate-700/60">
-          {(['admin', 'guru', 'siswa'] as UserRole[]).map((r) => (
-            <button
-              key={r}
-              onClick={() => switchRole(r)}
-              className={`px-2.5 py-1 text-xs font-bold rounded-xl transition-all duration-150 capitalize ${
-                role === r
-                  ? 'bg-white dark:bg-blue-600 text-blue-600 dark:text-white shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
-              }`}
-            >
-              {r}
-            </button>
-          ))}
+        {/* Locked Active Role Badge (Peran Terkunci Sesuai Akun Login) */}
+        <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60 shadow-sm select-none">
+          <Shield className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+          <span>{role === 'admin' ? 'Administrator' : role === 'guru' ? 'Guru Pengajar' : 'Siswa'}</span>
         </div>
 
         {/* Supabase Status Pill */}
