@@ -243,30 +243,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [schoolSettings, setSchoolSettings] = usePersistentState<SchoolSettings>('school_settings', initialSchoolSettings);
   const [academicYears, setAcademicYears] = usePersistentState<AcademicYear[]>('academic_years', initialAcademicYears);
   const [semesters, setSemesters] = usePersistentState<Semester[]>('semesters', initialSemesters);
-  const [teachers, setTeachers] = usePersistentState<Teacher[]>('teachers', initialTeachers);
-  const [classes, setClasses] = usePersistentState<ClassRoom[]>('classes', initialClasses);
-  const [subjects, setSubjects] = usePersistentState<Subject[]>('subjects', initialSubjects);
-  const [students, setStudents] = usePersistentState<Student[]>('students', initialStudents);
-  const [schedules, setSchedules] = usePersistentState<Schedule[]>('schedules', initialSchedules);
-  const [studentAttendance, setStudentAttendance] = usePersistentState<StudentAttendance[]>('student_attendance', initialAttendance);
+  const [teachers, setTeachers] = usePersistentState<Teacher[]>('teachers', []);
+  const [classes, setClasses] = usePersistentState<ClassRoom[]>('classes', []);
+  const [subjects, setSubjects] = usePersistentState<Subject[]>('subjects', []);
+  const [students, setStudents] = usePersistentState<Student[]>('students', []);
+  const [schedules, setSchedules] = usePersistentState<Schedule[]>('schedules', []);
+  const [studentAttendance, setStudentAttendance] = usePersistentState<StudentAttendance[]>('student_attendance', []);
   const [teacherAttendance, setTeacherAttendance] = usePersistentState<TeacherAttendance[]>('teacher_attendance', []);
-  const [gradeComponents, setGradeComponents] = usePersistentState<GradeComponent[]>('grade_components', initialGradeComponents);
-  const [grades, setGrades] = usePersistentState<Grade[]>('grades', initialGrades);
-  const [assignments, setAssignments] = usePersistentState<Assignment[]>('assignments', initialAssignments);
-  const [submissions, setSubmissions] = usePersistentState<AssignmentSubmission[]>('submissions', initialSubmissions);
-  const [learningMaterials, setLearningMaterials] = usePersistentState<LearningMaterial[]>('learning_materials', initialLearningMaterials);
-  const [exams, setExams] = usePersistentState<Exam[]>('exams', initialExams);
-  const [announcements, setAnnouncements] = usePersistentState<Announcement[]>('announcements', initialAnnouncements);
-  const [events, setEvents] = usePersistentState<AcademicEvent[]>('events', initialEvents);
-  const [inventory, setInventory] = usePersistentState<InventoryItem[]>('inventory', initialInventory);
-  const [inventoryLoans, setInventoryLoans] = usePersistentState<InventoryLoan[]>('inventory_loans', initialInventoryLoans);
-  const [incomingLetters, setIncomingLetters] = usePersistentState<IncomingLetter[]>('incoming_letters', initialIncomingLetters);
-  const [outgoingLetters, setOutgoingLetters] = usePersistentState<OutgoingLetter[]>('outgoing_letters', initialOutgoingLetters);
-  const [paymentTypes, setPaymentTypes] = usePersistentState<PaymentType[]>('payment_types', initialPaymentTypes);
-  const [studentBills, setStudentBills] = usePersistentState<StudentBill[]>('student_bills', initialStudentBills);
-  const [transactions, setTransactions] = usePersistentState<PaymentTransaction[]>('transactions', initialTransactions);
-  const [notifications, setNotifications] = usePersistentState<NotificationItem[]>('notifications', initialNotifications);
-  const [activityLogs, setActivityLogs] = usePersistentState<ActivityLog[]>('activity_logs', initialActivityLogs);
+  const [gradeComponents, setGradeComponents] = usePersistentState<GradeComponent[]>('grade_components', []);
+  const [grades, setGrades] = usePersistentState<Grade[]>('grades', []);
+  const [assignments, setAssignments] = usePersistentState<Assignment[]>('assignments', []);
+  const [submissions, setSubmissions] = usePersistentState<AssignmentSubmission[]>('submissions', []);
+  const [learningMaterials, setLearningMaterials] = usePersistentState<LearningMaterial[]>('learning_materials', []);
+  const [exams, setExams] = usePersistentState<Exam[]>('exams', []);
+  const [announcements, setAnnouncements] = usePersistentState<Announcement[]>('announcements', []);
+  const [events, setEvents] = usePersistentState<AcademicEvent[]>('events', []);
+  const [inventory, setInventory] = usePersistentState<InventoryItem[]>('inventory', []);
+  const [inventoryLoans, setInventoryLoans] = usePersistentState<InventoryLoan[]>('inventory_loans', []);
+  const [incomingLetters, setIncomingLetters] = usePersistentState<IncomingLetter[]>('incoming_letters', []);
+  const [outgoingLetters, setOutgoingLetters] = usePersistentState<OutgoingLetter[]>('outgoing_letters', []);
+  const [paymentTypes, setPaymentTypes] = usePersistentState<PaymentType[]>('payment_types', []);
+  const [studentBills, setStudentBills] = usePersistentState<StudentBill[]>('student_bills', []);
+  const [transactions, setTransactions] = usePersistentState<PaymentTransaction[]>('transactions', []);
+  const [notifications, setNotifications] = usePersistentState<NotificationItem[]>('notifications', []);
+  const [activityLogs, setActivityLogs] = usePersistentState<ActivityLog[]>('activity_logs', []);
 
   // Derived user profiles
   const role: UserRole = currentUser?.role || 'admin';
@@ -333,9 +333,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications([]);
 
     // Sisakan akun master admin di profiles
-    setProfiles(initialProfiles);
+    const adminProfiles = initialProfiles.filter(p => p.role === 'admin');
+    setProfiles(adminProfiles);
 
-    const keysToRemove = [
+    const keysToEmpty = [
       'sms_teachers', 'sms_classes', 'sms_subjects', 'sms_students',
       'sms_schedules', 'sms_student_attendance', 'sms_teacher_attendance',
       'sms_grade_components', 'sms_grades', 'sms_assignments',
@@ -345,18 +346,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       'sms_payment_types', 'sms_student_bills', 'sms_transactions',
       'sms_activity_logs', 'sms_notifications'
     ];
-    keysToRemove.forEach(k => {
-      try { localStorage.removeItem(k); } catch (e) {}
+    keysToEmpty.forEach(k => {
+      try { localStorage.setItem(k, JSON.stringify([])); } catch (e) {}
     });
+
+    try {
+      localStorage.setItem('sms_profiles', JSON.stringify(adminProfiles));
+    } catch (e) {}
 
     // 2. Bersihkan seluruh data transaksional di database MySQL Hostinger
     try {
-      await clearAllSchoolDataOnHostinger();
+      const res = await clearAllSchoolDataOnHostinger();
+      if (res && res.status === 'success') {
+        showToast('Database Dibersihkan', 'Seluruh data sekolah berhasil dihapus permanen dari sistem dan database MySQL.', 'success');
+      } else {
+        showToast('Database Dibersihkan', 'Data lokal berhasil dikosongkan. Periksa sinkronisasi database MySQL.', 'info');
+      }
     } catch (e) {
       console.warn('[Hostinger MySQL] Gagal membersihkan data server:', e);
+      showToast('Database Dibersihkan', 'Data lokal berhasil dikosongkan.', 'info');
     }
-
-    showToast('Database Dibersihkan', 'Seluruh data contoh berhasil dihapus permanen dari sistem dan database MySQL.', 'success');
   };
 
   // Cadangkan Data (Backup) & Pulihkan Data (Restore)
@@ -857,9 +866,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Berhasil', 'Data tahun ajaran telah diperbarui.');
   };
 
-  const deleteAcademicYear = (id: string) => {
+  const deleteAcademicYear = async (id: string) => {
     setAcademicYears(prev => prev.filter(ay => ay.id !== id));
-    deleteFromHostinger('academic_years', id);
+    await deleteFromHostinger('academic_years', id);
     logAction('DELETE', 'Tahun Ajaran', `Menghapus tahun ajaran ${id}`);
     showToast('Dihapus', 'Tahun ajaran berhasil dihapus.');
   };
@@ -1526,10 +1535,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Berhasil', 'Data tugas berhasil diperbarui.');
   };
 
-  const deleteAssignment = (id: string) => {
+  const deleteAssignment = async (id: string) => {
     setAssignments(prev => prev.filter(a => a.id !== id));
     setSubmissions(prev => prev.filter(s => s.assignment_id !== id));
-    deleteFromHostinger('assignments', id);
+    await deleteFromHostinger('assignments', id);
     logAction('DELETE', 'Tugas', `Menghapus tugas ${id}`);
     showToast('Dihapus', 'Tugas berhasil dihapus.');
   };
@@ -1588,9 +1597,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Materi Tersimpan', `Materi "${data.title}" berhasil dibagikan.`);
   };
 
-  const deleteLearningMaterial = (id: string) => {
+  const deleteLearningMaterial = async (id: string) => {
     setLearningMaterials(prev => prev.filter(m => m.id !== id));
-    deleteFromHostinger('learning_materials', id);
+    await deleteFromHostinger('learning_materials', id);
     showToast('Dihapus', 'Materi pembelajaran telah dihapus.');
   };
 
@@ -1611,9 +1620,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Ujian Dijadwalkan', `Ujian "${data.title}" telah ditambahkan.`);
   };
 
-  const deleteExam = (id: string) => {
+  const deleteExam = async (id: string) => {
     setExams(prev => prev.filter(e => e.id !== id));
-    deleteFromHostinger('exams', id);
+    await deleteFromHostinger('exams', id);
     showToast('Dihapus', 'Jadwal ujian telah dihapus.');
   };
 
@@ -1632,9 +1641,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Pengumuman Dipublish', 'Pengumuman berhasil disiarkan.');
   };
 
-  const deleteAnnouncement = (id: string) => {
+  const deleteAnnouncement = async (id: string) => {
     setAnnouncements(prev => prev.filter(a => a.id !== id));
-    deleteFromHostinger('announcements', id);
+    await deleteFromHostinger('announcements', id);
     showToast('Dihapus', 'Pengumuman telah dihapus.');
   };
 
@@ -1646,9 +1655,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Agenda Ditambahkan', `Agenda ${data.title} berhasil masuk kalender.`);
   };
 
-  const deleteEvent = (id: string) => {
+  const deleteEvent = async (id: string) => {
     setEvents(prev => prev.filter(e => e.id !== id));
-    deleteFromHostinger('academic_events', id);
+    await deleteFromHostinger('academic_events', id);
     showToast('Dihapus', 'Agenda kegiatan dihapus.');
   };
 
@@ -1668,9 +1677,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Berhasil', 'Data inventaris diperbarui.');
   };
 
-  const deleteInventory = (id: string) => {
+  const deleteInventory = async (id: string) => {
     setInventory(prev => prev.filter(i => i.id !== id));
-    deleteFromHostinger('inventory', id);
+    await deleteFromHostinger('inventory', id);
     showToast('Dihapus', 'Data inventaris telah dihapus.');
   };
 
@@ -1711,9 +1720,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Surat Masuk Dicatat', 'Arsip surat masuk berhasil disimpan.');
   };
 
-  const deleteIncomingLetter = (id: string) => {
+  const deleteIncomingLetter = async (id: string) => {
     setIncomingLetters(prev => prev.filter(l => l.id !== id));
-    deleteFromHostinger('incoming_letters', id);
+    await deleteFromHostinger('incoming_letters', id);
     showToast('Dihapus', 'Surat masuk dihapus.');
   };
 
@@ -1726,9 +1735,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Surat Keluar Dicatat', 'Surat keluar berhasil didaftarkan.');
   };
 
-  const deleteOutgoingLetter = (id: string) => {
+  const deleteOutgoingLetter = async (id: string) => {
     setOutgoingLetters(prev => prev.filter(l => l.id !== id));
-    deleteFromHostinger('outgoing_letters', id);
+    await deleteFromHostinger('outgoing_letters', id);
     showToast('Dihapus', 'Surat keluar dihapus.');
   };
 

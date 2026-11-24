@@ -15,29 +15,47 @@ $table = isset($_GET['table']) ? trim($_GET['table']) : '';
 $id = isset($_GET['id']) ? trim($_GET['id']) : '';
 $action = isset($_GET['action']) ? trim($_GET['action']) : '';
 
-// Tangani aksi pembersihan seluruh data sekolah (Clear All Dummy Data)
+// -------------------------------------------------------------
+// AKSI KHUSUS: Pembersihan Seluruh Data Sekolah (Clear All School Data)
+// -------------------------------------------------------------
 if ($action === 'clear_all_school_data') {
-    $tablesToClear = [
-        'teacher_attendance', 'student_attendance', 'grades', 'grade_components',
-        'assignment_submissions', 'assignments', 'learning_materials',
-        'exam_participants', 'exams', 'class_students', 'schedules',
-        'students', 'classes', 'subjects', 'teachers',
-        'announcements', 'academic_events', 'inventory_loans', 'inventory',
-        'incoming_letters', 'outgoing_letters', 'payment_transactions',
-        'student_bills', 'activity_logs', 'notifications'
-    ];
-    $pdo->beginTransaction();
-    foreach ($tablesToClear as $tbl) {
-        $pdo->exec("DELETE FROM `{$tbl}`");
-    }
-    // Hapus juga akun profil guru dan siswa (sisakan akun master administrator)
-    $pdo->exec("DELETE FROM `profiles` WHERE `role` != 'admin'");
-    $pdo->commit();
+    try {
+        // Ambil daftar tabel yang aktual ada di database
+        $colStmt = $pdo->query("SHOW TABLES");
+        $existingTables = $colStmt->fetchAll(PDO::FETCH_COLUMN);
 
-    echo json_encode([
-        'status' => 'success',
-        'message' => 'Seluruh data sekolah berhasil dibersihkan secara permanen dari database MySQL Hostinger.'
-    ]);
+        // Tabel sistem/konfigurasi yang tidak boleh dikosongkan
+        $excludedTables = ['school_settings', 'academic_years', 'semesters'];
+
+        $pdo->beginTransaction();
+        foreach ($existingTables as $tbl) {
+            if (!in_array($tbl, $excludedTables) && $tbl !== 'profiles') {
+                $pdo->exec("DELETE FROM `{$tbl}`");
+            }
+        }
+
+        // Hapus akun selain admin di profiles
+        if (in_array('profiles', $existingTables)) {
+            $pdo->exec("DELETE FROM `profiles` WHERE `role` != 'admin'");
+        }
+
+        $pdo->commit();
+
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'Seluruh data sekolah berhasil dibersihkan secara permanen dari database MySQL Hostinger.'
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        http_response_code(500);
+        echo json_encode([
+            'status' => 'error',
+            'code' => 500,
+            'message' => 'Gagal membersihkan data sekolah: ' . $e->getMessage()
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    }
     exit();
 }
 
@@ -78,9 +96,87 @@ function generateUuid() {
 }
 
 try {
+    // Periksa apakah tabel benar-benar ada di database
+    $tableCheck = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($table));
+    if ($tableCheck->rowCount() === 0) {
+        // Tabel belum dibuat di MySQL, return data kosong dengan aman tanpa error 500
+        if ($method === 'GET') {
+            echo json_encode([
+                'status' => 'success',
+                'table' => $table,
+                'count' => 0,
+                'data' => []
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            exit();
+        }
+        if ($method === 'DELETE' || in_array($action, ['delete', 'bulk_delete', 'clear_table'])) {
+            echo json_encode([
+                'status' => 'success',
+                'message' => "Tabel {$table} belum dibuat di database. Tidak ada data yang dihapus.",
+                'deleted' => 0
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            exit();
+        }
+    }
+
     // Ambil daftar kolom aktual dari tabel untuk validasi input
     $colStmt = $pdo->query("SHOW COLUMNS FROM `{$table}`");
     $allowedCols = $colStmt->fetchAll(PDO::FETCH_COLUMN);
+
+    // -------------------------------------------------------------
+    // DELETE / BULK DELETE / CLEAR TABLE
+    // (Dijalankan sebelum POST insert agar action=bulk_delete & clear_table ditangani dengan benar)
+    // -------------------------------------------------------------
+    if ($method === 'DELETE' || in_array($action, ['delete', 'bulk_delete', 'clear_table'])) {
+        // 1. Bulk Delete via POST atau DELETE
+        if ($action === 'bulk_delete') {
+            if (!empty($inputData) && is_array($inputData)) {
+                $ids = array_filter(array_map('trim', $inputData));
+                if (empty($ids)) {
+                    echo json_encode(['status' => 'success', 'deleted' => 0]);
+                    exit();
+                }
+                $placeholders = implode(',', array_fill(0, count($ids), '?'));
+                $stmt = $pdo->prepare("DELETE FROM `{$table}` WHERE `id` IN ({$placeholders})");
+                $stmt->execute(array_values($ids));
+                echo json_encode([
+                    'status' => 'success',
+                    'message' => "Berhasil menghapus " . count($ids) . " data dari {$table}.",
+                    'deleted' => count($ids)
+                ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            } else {
+                echo json_encode(['status' => 'success', 'deleted' => 0]);
+            }
+            exit();
+        }
+
+        // 2. Clear seluruh tabel
+        if ($action === 'clear_table') {
+            $pdo->exec("DELETE FROM `{$table}`");
+            echo json_encode([
+                'status' => 'success',
+                'message' => "Seluruh data pada tabel {$table} berhasil dibersihkan."
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            exit();
+        }
+
+        // 3. Single Delete berdasarkan ID
+        if (empty($id)) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'Parameter id wajib diisi untuk hapus.']);
+            exit();
+        }
+
+        $stmt = $pdo->prepare("DELETE FROM `{$table}` WHERE `id` = :id");
+        $stmt->execute(['id' => $id]);
+
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'Data berhasil dihapus dari database MySQL Hostinger.',
+            'id' => $id
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        exit();
+    }
 
     // -------------------------------------------------------------
     // GET: Ambil Data
@@ -142,7 +238,7 @@ try {
     }
 
     // -------------------------------------------------------------
-    // POST: Tambah Data (Single atau Bulk)
+    // POST: Tambah Data (Single atau Bulk Insert)
     // -------------------------------------------------------------
     if ($method === 'POST') {
         if ($action === 'bulk_insert' && is_array($inputData)) {
@@ -178,7 +274,7 @@ try {
             echo json_encode([
                 'status' => 'success',
                 'message' => "Berhasil menyimpan {$insertedCount} data ke {$table}."
-            ]);
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
             exit();
         }
 
@@ -220,7 +316,7 @@ try {
             'message' => 'Data berhasil disimpan ke database MySQL Hostinger.',
             'id' => $filteredData['id'],
             'data' => $filteredData
-        ]);
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
         exit();
     }
 
@@ -264,57 +360,7 @@ try {
             'status' => 'success',
             'message' => 'Data berhasil diperbarui di database MySQL Hostinger.',
             'id' => $id
-        ]);
-        exit();
-    }
-
-    // -------------------------------------------------------------
-    // DELETE: Hapus Data (Single, Bulk, atau Clear Table)
-    // -------------------------------------------------------------
-    if ($method === 'DELETE' || ($method === 'POST' && in_array($action, ['delete', 'bulk_delete', 'clear_table']))) {
-        // 1. Bulk Delete via POST/DELETE
-        if ($action === 'bulk_delete' && !empty($inputData) && is_array($inputData)) {
-            $ids = array_filter(array_map('trim', $inputData));
-            if (empty($ids)) {
-                echo json_encode(['status' => 'success', 'deleted' => 0]);
-                exit();
-            }
-            $placeholders = implode(',', array_fill(0, count($ids), '?'));
-            $stmt = $pdo->prepare("DELETE FROM `{$table}` WHERE `id` IN ({$placeholders})");
-            $stmt->execute(array_values($ids));
-            echo json_encode([
-                'status' => 'success',
-                'message' => "Berhasil menghapus " . count($ids) . " data dari {$table}.",
-                'deleted' => count($ids)
-            ]);
-            exit();
-        }
-
-        // 2. Clear seluruh tabel
-        if ($action === 'clear_table') {
-            $pdo->exec("DELETE FROM `{$table}`");
-            echo json_encode([
-                'status' => 'success',
-                'message' => "Seluruh data pada tabel {$table} berhasil dibersihkan."
-            ]);
-            exit();
-        }
-
-        // 3. Single Delete berdasarkan ID
-        if (empty($id)) {
-            http_response_code(400);
-            echo json_encode(['status' => 'error', 'message' => 'Parameter id wajib diisi untuk hapus.']);
-            exit();
-        }
-
-        $stmt = $pdo->prepare("DELETE FROM `{$table}` WHERE `id` = :id");
-        $stmt->execute(['id' => $id]);
-
-        echo json_encode([
-            'status' => 'success',
-            'message' => 'Data berhasil dihapus dari database MySQL Hostinger.',
-            'id' => $id
-        ]);
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
         exit();
     }
 
