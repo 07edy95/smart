@@ -1,0 +1,37 @@
+# ==============================================================================
+# KONFIGURASI APACHE / LITESPEED HOSTINGER (hPanel)
+# SISTEM MANAJEMEN SEKOLAH SMART - SMA MEDANGGILI CIRUAS
+# Otomatis mengarahkan seluruh lalu lintas web ke folder produksi /dist/
+# ==============================================================================
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # 1. Biarkan request ke direktori API dan Uploads diproses langsung
+  RewriteRule ^api/(.*)$ dist/api/$1 [L]
+  RewriteRule ^uploads/(.*)$ dist/uploads/$1 [L]
+
+  # 2. Arahkan aset web (JS, CSS, Gambar) langsung ke dist/
+  RewriteRule ^assets/(.*)$ dist/assets/$1 [L]
+  RewriteRule ^logo\.(png|svg|ico)$ dist/$0 [L]
+  RewriteRule ^favicon\.ico$ dist/logo.png [L]
+
+  # 3. Halaman utama (/) langsung sajikan dist/index.html
+  RewriteRule ^$ dist/index.html [L]
+
+  # 4. Semua rute halaman SPA React diarahkan ke dist/index.html
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^(.*)$ dist/index.html [L]
+</IfModule>
+
+# Keamanan Header Tambahan
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set X-XSS-Protection "1; mode=block"
+</IfModule>
+
+# Cegah browsing direktori
+Options -Indexes
