@@ -7,6 +7,7 @@ node_modules/
 coverage/
 
 # Environment files
+push_ke_github.bat
 .env
 .env.local
 .env.development.local
