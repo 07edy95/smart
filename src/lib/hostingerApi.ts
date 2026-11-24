@@ -143,6 +143,54 @@ export async function deleteFromHostinger(table: string, id: string): Promise<an
 }
 
 /**
+ * Menghapus data masal (bulk delete) dari MySQL Hostinger dalam satu transaksi
+ */
+export async function deleteBulkFromHostinger(table: string, ids: string[]): Promise<any> {
+  try {
+    if (!ids || ids.length === 0) return { status: 'success', deleted: 0 };
+    const res = await fetch(`/api/data.php?table=${encodeURIComponent(table)}&action=bulk_delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ids)
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn(`[Hostinger MySQL] Gagal menghapus masal dari tabel ${table}:`, e);
+    return null;
+  }
+}
+
+/**
+ * Mengosongkan satu tabel tertentu di MySQL Hostinger
+ */
+export async function clearTableOnHostinger(table: string): Promise<any> {
+  try {
+    const res = await fetch(`/api/data.php?table=${encodeURIComponent(table)}&action=clear_table`, {
+      method: 'POST'
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn(`[Hostinger MySQL] Gagal membersihkan tabel ${table}:`, e);
+    return null;
+  }
+}
+
+/**
+ * Membersihkan seluruh data sekolah contoh/transaksional dari MySQL Hostinger (Keep Master Admin)
+ */
+export async function clearAllSchoolDataOnHostinger(): Promise<any> {
+  try {
+    const res = await fetch('/api/data.php?action=clear_all_school_data', {
+      method: 'POST'
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('[Hostinger MySQL] Gagal membersihkan seluruh data sekolah:', e);
+    return null;
+  }
+}
+
+/**
  * Mengunggah berkas ke server hosting Hostinger (/uploads/)
  */
 export async function uploadFile(

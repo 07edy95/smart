@@ -6,7 +6,7 @@ import { ClassRoom } from '../../types/database';
 import { DoorOpen, Eye, Edit3, Trash2, Users, GraduationCap } from 'lucide-react';
 
 export const ClassModule: React.FC = () => {
-  const { classes, addClass, updateClass, deleteClass, teachers, students, role } = useApp();
+  const { classes, addClass, updateClass, deleteClass, bulkDeleteClasses, teachers, students, role } = useApp();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -146,7 +146,7 @@ export const ClassModule: React.FC = () => {
         searchKeys={['name', 'code', 'homeroom_teacher_name', 'major']}
         onAddClick={isAdmin ? handleOpenAdd : undefined}
         addButtonLabel="Tambah Kelas Baru"
-        onBulkDelete={isAdmin ? (ids) => ids.forEach(deleteClass) : undefined}
+        onBulkDelete={isAdmin ? bulkDeleteClasses : undefined}
       />
 
       {/* Add / Edit Modal */}

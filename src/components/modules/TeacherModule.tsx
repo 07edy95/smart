@@ -7,7 +7,7 @@ import { formatDate, generateUsername, getDefaultPassword, exportToExcel, parseE
 import { UserCheck, Eye, Edit3, Trash2, Mail, Phone, BookOpen, Key, Copy, Check, Upload, Download, FileSpreadsheet, Clipboard, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export const TeacherModule: React.FC = () => {
-  const { teachers, addTeacher, updateTeacher, deleteTeacher, importTeachers, role, showToast } = useApp();
+  const { teachers, addTeacher, updateTeacher, deleteTeacher, bulkDeleteTeachers, importTeachers, role, showToast } = useApp();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -388,7 +388,7 @@ export const TeacherModule: React.FC = () => {
         searchKeys={['full_name', 'nip', 'email', 'position']}
         onAddClick={isAdmin ? handleOpenAdd : undefined}
         addButtonLabel="Tambah Guru Baru"
-        onBulkDelete={isAdmin ? (ids) => ids.forEach(deleteTeacher) : undefined}
+        onBulkDelete={isAdmin ? bulkDeleteTeachers : undefined}
         extraActions={
           isAdmin ? (
             <button

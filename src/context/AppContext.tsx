@@ -23,6 +23,8 @@ import {
   insertToHostinger, 
   updateInHostinger, 
   deleteFromHostinger, 
+  deleteBulkFromHostinger,
+  clearAllSchoolDataOnHostinger,
   insertBulkToHostinger, 
   testHostingerConnection 
 } from '../lib/hostingerApi';
@@ -73,23 +75,27 @@ interface AppContextType {
   addClass: (data: Omit<ClassRoom, 'id'>) => void;
   updateClass: (id: string, data: Partial<ClassRoom>) => void;
   deleteClass: (id: string) => void;
+  bulkDeleteClasses: (ids: string[]) => void;
 
   teachers: Teacher[];
   addTeacher: (data: Omit<Teacher, 'id'>) => void;
   updateTeacher: (id: string, data: Partial<Teacher>) => void;
   deleteTeacher: (id: string) => void;
+  bulkDeleteTeachers: (ids: string[]) => void;
   importTeachers: (teachersList: Omit<Teacher, 'id'>[]) => void;
 
   students: Student[];
   addStudent: (data: Omit<Student, 'id'>) => void;
   updateStudent: (id: string, data: Partial<Student>) => void;
   deleteStudent: (id: string) => void;
+  bulkDeleteStudents: (ids: string[]) => void;
   importStudents: (studentsList: Omit<Student, 'id'>[]) => void;
 
   subjects: Subject[];
   addSubject: (data: Omit<Subject, 'id'>) => void;
   updateSubject: (id: string, data: Partial<Subject>) => void;
   deleteSubject: (id: string) => void;
+  bulkDeleteSubjects: (ids: string[]) => void;
   importSubjects: (subjectsList: Omit<Subject, 'id'>[]) => void;
 
   schedules: Schedule[];
@@ -298,8 +304,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [schoolSettings.school_name, schoolSettings.npsn]);
 
-  // Hapus semua data dummy / contoh
-  const clearAllDummyData = () => {
+  // Hapus semua data dummy / contoh secara permanen (Lokal & Database MySQL Hostinger)
+  const clearAllDummyData = async () => {
+    // 1. Kosongkan state lokal
     setTeachers([]);
     setClasses([]);
     setSubjects([]);
@@ -325,6 +332,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActivityLogs([]);
     setNotifications([]);
 
+    // Sisakan akun master admin di profiles
+    setProfiles(initialProfiles);
+
     const keysToRemove = [
       'sms_teachers', 'sms_classes', 'sms_subjects', 'sms_students',
       'sms_schedules', 'sms_student_attendance', 'sms_teacher_attendance',
@@ -339,7 +349,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try { localStorage.removeItem(k); } catch (e) {}
     });
 
-    showToast('Data Contoh Dihapus', 'Seluruh data dummy berhasil dibersihkan dari sistem.', 'success');
+    // 2. Bersihkan seluruh data transaksional di database MySQL Hostinger
+    try {
+      await clearAllSchoolDataOnHostinger();
+    } catch (e) {
+      console.warn('[Hostinger MySQL] Gagal membersihkan data server:', e);
+    }
+
+    showToast('Database Dibersihkan', 'Seluruh data contoh berhasil dihapus permanen dari sistem dan database MySQL.', 'success');
   };
 
   // Cadangkan Data (Backup) & Pulihkan Data (Restore)
@@ -529,47 +546,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fetchFromHostinger('semesters')
         ]);
 
-        // 1. Data Guru (Teachers)
-        if (Array.isArray(remoteTeachers) && remoteTeachers.length > 0) {
+        // 1. Data Guru (Teachers) - Database MySQL sebagai Single Source of Truth
+        if (Array.isArray(remoteTeachers)) {
           setTeachers(remoteTeachers);
-        } else if (teachers.length > 0) {
-          // Device yang memiliki data guru lokal mendorong ke database MySQL yang masih kosong
-          console.log('[Auto-Sync] Mendorong data guru lokal ke database MySQL Hostinger...');
-          const guruProfiles = profiles.filter(p => p.role === 'guru');
-          if (guruProfiles.length > 0) await insertBulkToHostinger('profiles', guruProfiles);
-          await insertBulkToHostinger('teachers', teachers);
         }
 
-        // 2. Data Siswa (Students)
-        if (Array.isArray(remoteStudents) && remoteStudents.length > 0) {
+        // 2. Data Siswa (Students) - Database MySQL sebagai Single Source of Truth
+        if (Array.isArray(remoteStudents)) {
           setStudents(remoteStudents);
-        } else if (students.length > 0) {
-          // Device yang memiliki data siswa lokal mendorong ke database MySQL yang masih kosong
-          console.log('[Auto-Sync] Mendorong data siswa lokal ke database MySQL Hostinger...');
-          const siswaProfiles = profiles.filter(p => p.role === 'siswa');
-          if (siswaProfiles.length > 0) await insertBulkToHostinger('profiles', siswaProfiles);
-          await insertBulkToHostinger('students', students);
         }
 
-        // 3. Data Kelas (Classes)
-        if (Array.isArray(remoteClasses) && remoteClasses.length > 0) {
+        // 3. Data Kelas (Classes) - Database MySQL sebagai Single Source of Truth
+        if (Array.isArray(remoteClasses)) {
           setClasses(remoteClasses);
-        } else if (classes.length > 0) {
-          await insertBulkToHostinger('classes', classes);
         }
 
-        // 4. Data Mata Pelajaran (Subjects)
-        if (Array.isArray(remoteSubjects) && remoteSubjects.length > 0) {
+        // 4. Data Mata Pelajaran (Subjects) - Database MySQL sebagai Single Source of Truth
+        if (Array.isArray(remoteSubjects)) {
           setSubjects(remoteSubjects);
-        } else if (subjects.length > 0) {
-          await insertBulkToHostinger('subjects', subjects);
         }
 
-        // 5. Data Jadwal (Schedules)
-        if (Array.isArray(remoteSchedules) && remoteSchedules.length > 0) {
+        // 5. Data Jadwal (Schedules) - Database MySQL sebagai Single Source of Truth
+        if (Array.isArray(remoteSchedules)) {
           setSchedules(remoteSchedules);
-        } else if (schedules.length > 0) {
-          await insertBulkToHostinger('schedules', schedules);
         }
 
         // 6. Pengaturan Sekolah (School Settings)
@@ -586,7 +585,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         // 8. Profil Pengguna (Profiles)
-        if (Array.isArray(remoteProfiles) && remoteProfiles.length > 0) {
+        if (Array.isArray(remoteProfiles)) {
           const mergedProfiles = [...initialProfiles];
           remoteProfiles.forEach(rp => {
             if (!mergedProfiles.some(mp => mp.id === rp.id || (rp.username && mp.username === rp.username))) {
@@ -907,11 +906,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Berhasil', 'Data rombel/kelas berhasil disimpan.');
   };
 
-  const deleteClass = (id: string) => {
+  const deleteClass = async (id: string) => {
     setClasses(prev => prev.filter(c => c.id !== id));
-    deleteFromHostinger('classes', id);
+    await deleteFromHostinger('classes', id);
     logAction('DELETE', 'Data Kelas', `Menghapus kelas ${id}`);
-    showToast('Dihapus', 'Data kelas telah dihapus.');
+    showToast('Dihapus', 'Data kelas telah dihapus permanen.');
+  };
+
+  const bulkDeleteClasses = async (ids: string[]) => {
+    setClasses(prev => prev.filter(c => !ids.includes(c.id)));
+    await deleteBulkFromHostinger('classes', ids);
+    logAction('DELETE', 'Data Kelas', `Menghapus massal ${ids.length} data kelas`);
+    showToast('Dihapus', `${ids.length} data kelas berhasil dihapus permanen.`);
   };
 
   // Teacher Management
@@ -982,16 +988,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Berhasil', 'Data guru berhasil diperbarui.');
   };
 
-  const deleteTeacher = (id: string) => {
+  const deleteTeacher = async (id: string) => {
     const t = teachers.find(item => item.id === id);
-    if (t?.profile_id) {
-      setProfiles(prev => prev.filter(p => p.id !== t.profile_id));
-      deleteFromHostinger('profiles', t.profile_id);
+    setTeachers(prev => prev.filter(item => item.id !== id));
+    await deleteFromHostinger('teachers', id);
+
+    if (t) {
+      const username = t.username || generateUsername(t.full_name);
+      setProfiles(prev => prev.filter(p => 
+        p.id !== t.profile_id && 
+        p.username?.toLowerCase() !== username.toLowerCase() && 
+        p.email?.toLowerCase() !== t.email?.toLowerCase()
+      ));
+      if (t.profile_id) {
+        await deleteFromHostinger('profiles', t.profile_id);
+      }
     }
-    setTeachers(prev => prev.filter(t => t.id !== id));
-    deleteFromHostinger('teachers', id);
-    logAction('DELETE', 'Data Guru', `Menghapus data guru ${id}`);
-    showToast('Dihapus', 'Data guru telah dihapus.');
+    logAction('DELETE', 'Data Guru', `Menghapus data guru ${t?.full_name || id}`);
+    showToast('Dihapus', 'Data guru telah dihapus permanen.');
+  };
+
+  const bulkDeleteTeachers = async (ids: string[]) => {
+    const selectedTeachers = teachers.filter(t => ids.includes(t.id));
+    const profileIds = selectedTeachers.map(t => t.profile_id).filter(Boolean) as string[];
+    const usernames = selectedTeachers.map(t => (t.username || generateUsername(t.full_name)).toLowerCase()).filter(Boolean);
+
+    setTeachers(prev => prev.filter(t => !ids.includes(t.id)));
+    setProfiles(prev => prev.filter(p => !profileIds.includes(p.id) && !usernames.includes(p.username?.toLowerCase() || '')));
+
+    await deleteBulkFromHostinger('teachers', ids);
+    if (profileIds.length > 0) {
+      await deleteBulkFromHostinger('profiles', profileIds);
+    }
+    logAction('DELETE', 'Data Guru', `Menghapus massal ${ids.length} data guru`);
+    showToast('Dihapus', `${ids.length} data guru berhasil dihapus permanen.`);
   };
 
   const importTeachers = async (teachersList: Omit<Teacher, 'id'>[]) => {
@@ -1118,16 +1148,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Berhasil', 'Data siswa berhasil diperbarui.');
   };
 
-  const deleteStudent = (id: string) => {
+  const deleteStudent = async (id: string) => {
     const s = students.find(item => item.id === id);
-    if (s?.profile_id) {
-      setProfiles(prev => prev.filter(p => p.id !== s.profile_id));
-      deleteFromHostinger('profiles', s.profile_id);
+    setStudents(prev => prev.filter(item => item.id !== id));
+    await deleteFromHostinger('students', id);
+
+    if (s) {
+      const username = s.username || generateUsername(s.full_name);
+      setProfiles(prev => prev.filter(p => 
+        p.id !== s.profile_id && 
+        p.username?.toLowerCase() !== username.toLowerCase() && 
+        p.email?.toLowerCase() !== `${username}@siswa.sekolah.sch.id`.toLowerCase()
+      ));
+      if (s.profile_id) {
+        await deleteFromHostinger('profiles', s.profile_id);
+      }
     }
-    setStudents(prev => prev.filter(s => s.id !== id));
-    deleteFromHostinger('students', id);
-    logAction('DELETE', 'Data Siswa', `Menghapus siswa ${id}`);
-    showToast('Dihapus', 'Data siswa berhasil dihapus.');
+    logAction('DELETE', 'Data Siswa', `Menghapus siswa ${s?.full_name || id}`);
+    showToast('Dihapus', 'Data siswa telah dihapus permanen.');
+  };
+
+  const bulkDeleteStudents = async (ids: string[]) => {
+    const selectedStudents = students.filter(s => ids.includes(s.id));
+    const profileIds = selectedStudents.map(s => s.profile_id).filter(Boolean) as string[];
+    const usernames = selectedStudents.map(s => (s.username || generateUsername(s.full_name)).toLowerCase()).filter(Boolean);
+
+    setStudents(prev => prev.filter(s => !ids.includes(s.id)));
+    setProfiles(prev => prev.filter(p => !profileIds.includes(p.id) && !usernames.includes(p.username?.toLowerCase() || '')));
+
+    await deleteBulkFromHostinger('students', ids);
+    if (profileIds.length > 0) {
+      await deleteBulkFromHostinger('profiles', profileIds);
+    }
+    logAction('DELETE', 'Data Siswa', `Menghapus massal ${ids.length} data siswa`);
+    showToast('Dihapus', `${ids.length} data siswa berhasil dihapus permanen.`);
   };
 
   const importStudents = async (studentsList: Omit<Student, 'id'>[]) => {
@@ -1209,11 +1263,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Berhasil', 'Data mata pelajaran berhasil disimpan.');
   };
 
-  const deleteSubject = (id: string) => {
+  const deleteSubject = async (id: string) => {
     setSubjects(prev => prev.filter(s => s.id !== id));
-    deleteFromHostinger('subjects', id);
+    await deleteFromHostinger('subjects', id);
     logAction('DELETE', 'Mata Pelajaran', `Menghapus mata pelajaran ${id}`);
-    showToast('Dihapus', 'Mata pelajaran berhasil dihapus.');
+    showToast('Dihapus', 'Mata pelajaran telah dihapus permanen.');
+  };
+
+  const bulkDeleteSubjects = async (ids: string[]) => {
+    setSubjects(prev => prev.filter(s => !ids.includes(s.id)));
+    await deleteBulkFromHostinger('subjects', ids);
+    logAction('DELETE', 'Mata Pelajaran', `Menghapus massal ${ids.length} mata pelajaran`);
+    showToast('Dihapus', `${ids.length} mata pelajaran berhasil dihapus permanen.`);
   };
 
   const importSubjects = (subjectsList: Omit<Subject, 'id'>[]) => {
@@ -1329,11 +1390,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { success: true };
   };
 
-  const deleteSchedule = (id: string) => {
+  const deleteSchedule = async (id: string) => {
     setSchedules(prev => prev.filter(s => s.id !== id));
-    deleteFromHostinger('schedules', id);
+    await deleteFromHostinger('schedules', id);
     logAction('DELETE', 'Jadwal Pelajaran', `Menghapus jadwal ${id}`);
-    showToast('Dihapus', 'Jadwal telah dihapus.');
+    showToast('Dihapus', 'Jadwal telah dihapus permanen.');
   };
 
   // Attendance
@@ -1760,20 +1821,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addClass,
       updateClass,
       deleteClass,
+      bulkDeleteClasses,
       teachers,
       addTeacher,
       updateTeacher,
       deleteTeacher,
+      bulkDeleteTeachers,
       importTeachers,
       students,
       addStudent,
       updateStudent,
       deleteStudent,
+      bulkDeleteStudents,
       importStudents,
       subjects,
       addSubject,
       updateSubject,
       deleteSubject,
+      bulkDeleteSubjects,
       importSubjects,
       schedules,
       addSchedule,

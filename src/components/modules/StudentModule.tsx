@@ -13,7 +13,7 @@ import {
 export const StudentModule: React.FC = () => {
   const { 
     students, addStudent, updateStudent, deleteStudent, 
-    importStudents, classes, role, showToast 
+    bulkDeleteStudents, importStudents, classes, role, showToast 
   } = useApp();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -441,7 +441,7 @@ export const StudentModule: React.FC = () => {
         searchKeys={['full_name', 'nis', 'nisn', 'father_name', 'mother_name']}
         onAddClick={isAdmin ? handleOpenAdd : undefined}
         addButtonLabel="Tambah Siswa Baru"
-        onBulkDelete={isAdmin ? (ids) => ids.forEach(deleteStudent) : undefined}
+        onBulkDelete={isAdmin ? bulkDeleteStudents : undefined}
         extraActions={
           isAdmin ? (
             <button

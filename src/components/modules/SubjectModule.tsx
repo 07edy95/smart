@@ -15,6 +15,7 @@ export const SubjectModule: React.FC = () => {
     addSubject, 
     updateSubject, 
     deleteSubject, 
+    bulkDeleteSubjects,
     importSubjects, 
     teachers, 
     role, 
@@ -438,7 +439,7 @@ export const SubjectModule: React.FC = () => {
         searchKeys={['name', 'code', 'category', 'teacher_name']}
         onAddClick={isAdmin ? handleOpenAdd : undefined}
         addButtonLabel="Tambah Mapel"
-        onBulkDelete={isAdmin ? (ids) => ids.forEach(deleteSubject) : undefined}
+        onBulkDelete={isAdmin ? bulkDeleteSubjects : undefined}
         extraActions={
           isAdmin ? (
             <button
