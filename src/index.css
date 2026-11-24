@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans antialiased text-slate-800 dark:text-slate-100 bg-[#F5EFEB] dark:bg-[#0B132B];
+  }
+}
+
+@layer components {
+  /* Real Claymorphic 3D Card (Soft 3D / Clay UI) */
+  .clay-card {
+    @apply bg-white dark:bg-[#1C2541] rounded-[28px] border border-white/80 dark:border-white/10 
+           shadow-[8px_10px_24px_rgba(180,175,165,0.28),-6px_-6px_18px_rgba(255,255,255,0.95)] 
+           dark:shadow-[8px_10px_24px_rgba(0,0,0,0.5),-3px_-3px_10px_rgba(255,255,255,0.03)] 
+           transition-all duration-300;
+  }
+
+  .clay-card-flat {
+    @apply bg-white/90 dark:bg-[#1C2541]/90 backdrop-blur-md rounded-2xl border border-slate-100 dark:border-slate-800 
+           shadow-sm transition-all duration-200;
+  }
+
+  .clay-card-interactive {
+    @apply clay-card hover:-translate-y-1.5 hover:shadow-[10px_14px_30px_rgba(180,175,165,0.38),-8px_-8px_20px_rgba(255,255,255,1)] 
+           dark:hover:shadow-[10px_14px_30px_rgba(0,0,0,0.6),-3px_-3px_10px_rgba(255,255,255,0.05)];
+  }
+
+  /* Pastel Clay Variant Cards (Matching Reference Style) */
+  .clay-pastel-mint {
+    @apply bg-[#E4F4EC] dark:bg-[#153429] border border-[#CDEEDC] dark:border-[#1E4A3A] text-[#1B4332] dark:text-[#A7F3D0]
+           shadow-[6px_8px_20px_rgba(165,205,185,0.35),-5px_-5px_15px_rgba(255,255,255,0.9)];
+  }
+
+  .clay-pastel-peach {
+    @apply bg-[#FDE9E1] dark:bg-[#38221B] border border-[#FAD2C3] dark:border-[#522E23] text-[#78281F] dark:text-[#FECDD3]
+           shadow-[6px_8px_20px_rgba(225,185,175,0.35),-5px_-5px_15px_rgba(255,255,255,0.9)];
+  }
+
+  .clay-pastel-amber {
+    @apply bg-[#FEF4DB] dark:bg-[#372A14] border border-[#FDE5B3] dark:border-[#533E1A] text-[#7A5310] dark:text-[#FDE68A]
+           shadow-[6px_8px_20px_rgba(225,205,160,0.35),-5px_-5px_15px_rgba(255,255,255,0.9)];
+  }
+
+  .clay-pastel-blue {
+    @apply bg-[#E3F0FE] dark:bg-[#152744] border border-[#CDE3FD] dark:border-[#1F3A66] text-[#1E3A8A] dark:text-[#BFDBFE]
+           shadow-[6px_8px_20px_rgba(170,195,230,0.35),-5px_-5px_15px_rgba(255,255,255,0.9)];
+  }
+
+  /* 3D Squircle Icon Container with Emboss & Inset Highlight */
+  .clay-squircle {
+    @apply rounded-2xl flex items-center justify-center
+           shadow-[4px_5px_12px_rgba(0,0,0,0.08),inset_2px_2px_4px_rgba(255,255,255,0.9),inset_-2px_-2px_4px_rgba(0,0,0,0.05)]
+           transition-transform duration-200;
+  }
+
+  /* Inset / Pressed well */
+  .clay-inset {
+    @apply bg-[#E9EEF4] dark:bg-[#141C33] rounded-2xl 
+           shadow-[inset_3px_3px_7px_rgba(180,195,215,0.5),inset_-3px_-3px_7px_rgba(255,255,255,0.9)] 
+           dark:shadow-[inset_3px_3px_7px_rgba(0,0,0,0.6),inset_-2px_-2px_5px_rgba(255,255,255,0.05)];
+  }
+
+  /* Soft 3D Action Buttons */
+  .clay-btn {
+    @apply px-4 py-2.5 rounded-2xl font-semibold inline-flex items-center justify-center gap-2 
+           transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .clay-btn-primary {
+    @apply clay-btn text-white bg-gradient-to-r from-blue-600 to-indigo-600 
+           shadow-[0_6px_16px_rgba(37,99,235,0.35)] hover:shadow-[0_8px_20px_rgba(37,99,235,0.45)] 
+           hover:from-blue-500 hover:to-indigo-500;
+  }
+
+  /* 3D Clay Pill Buttons (From reference image) */
+  .clay-pill-coral {
+    @apply px-5 py-2.5 rounded-full font-bold text-white bg-gradient-to-b from-[#FF7A50] to-[#E95B30]
+           shadow-[0_6px_16px_rgba(233,91,48,0.4),inset_0_2px_3px_rgba(255,255,255,0.45),inset_0_-2px_3px_rgba(0,0,0,0.2)]
+           hover:brightness-105 active:scale-95 transition-all inline-flex items-center gap-2;
+  }
+
+  .clay-pill-teal {
+    @apply px-5 py-2.5 rounded-full font-bold text-white bg-gradient-to-b from-[#56B8AB] to-[#3A9D90]
+           shadow-[0_6px_16px_rgba(58,157,144,0.35),inset_0_2px_3px_rgba(255,255,255,0.45)]
+           hover:brightness-105 active:scale-95 transition-all inline-flex items-center gap-2;
+  }
+
+  .clay-btn-secondary {
+    @apply clay-btn bg-white dark:bg-[#1E293B] text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 
+           shadow-[3px_3px_8px_rgba(180,195,215,0.35),-3px_-3px_8px_rgba(255,255,255,0.9)] 
+           dark:shadow-[3px_3px_8px_rgba(0,0,0,0.4)] hover:bg-slate-50 dark:hover:bg-slate-800;
+  }
+
+  .clay-btn-danger {
+    @apply clay-btn text-white bg-gradient-to-r from-rose-500 to-red-600 
+           shadow-[0_6px_16px_rgba(239,68,68,0.35)] hover:shadow-[0_8px_20px_rgba(239,68,68,0.45)];
+  }
+
+  /* Soft 3D Pill Badges */
+  .clay-badge {
+    @apply px-3 py-1 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 
+           shadow-sm border;
+  }
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.4);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.6);
+}

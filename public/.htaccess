@@ -1,0 +1,31 @@
+# ==============================================================================
+# KONFIGURASI APACHE / LITESPEED HOSTINGER (hPanel)
+# SISTEM MANAJEMEN SEKOLAH - SMA MEDANGGILI CIRUAS
+# ==============================================================================
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # 1. Biarkan request ke direktori API dan Upload diproses langsung oleh PHP / Server
+  RewriteRule ^api/ - [L]
+  RewriteRule ^uploads/ - [L]
+
+  # 2. Jika request menargetkan file atau direktori yang benar-benar ada di disk, layani langsung
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # 3. Semua rute frontend React SPA diarahkan ke index.html
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+# Keamanan Header Tambahan
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set X-XSS-Protection "1; mode=block"
+</IfModule>
+
+# Cegah browsing direktori
+Options -Indexes
