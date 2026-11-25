@@ -241,7 +241,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // --- Core Data Stores ---
   const [profiles, setProfiles] = usePersistentState<Profile[]>('profiles', initialProfiles);
-  const [currentUser, setCurrentUser] = usePersistentState<Profile | null>('current_user', initialProfiles[0]);
+  const [currentUser, setCurrentUser] = usePersistentState<Profile | null>('current_user', null);
   const [schoolSettings, setSchoolSettings] = usePersistentState<SchoolSettings>('school_settings', initialSchoolSettings);
   const [academicYears, setAcademicYears] = usePersistentState<AcademicYear[]>('academic_years', initialAcademicYears);
   const [semesters, setSemesters] = usePersistentState<Semester[]>('semesters', initialSemesters);
@@ -306,22 +306,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   }, [role, teacherProfile, currentUser, subjects, schedules]);
 
-  // Filter kelas / rombel yang diampu oleh guru (sebagai wali kelas atau guru mata pelajaran)
+  // Guru mata pelajaran dapat mengajar mapelnya di semua rombel / kelas di sekolah (SMA Medanggili Ciruas)
   const teacherClasses = React.useMemo(() => {
-    if (role !== 'guru') return classes;
-    const tId = teacherProfile?.id;
-    const tName = (teacherProfile?.full_name || currentUser?.full_name || '').toLowerCase().trim();
-
-    const classIdsInSchedule = schedules
-      .filter(s => (tId && s.teacher_id === tId) || (tName && s.teacher_name && s.teacher_name.toLowerCase().trim() === tName))
-      .map(s => s.class_id);
-
-    return classes.filter(c => 
-      classIdsInSchedule.includes(c.id) || 
-      (tId && c.homeroom_teacher_id === tId) ||
-      (tName && c.homeroom_teacher_name && c.homeroom_teacher_name.toLowerCase().trim() === tName)
-    );
-  }, [role, teacherProfile, currentUser, classes, schedules]);
+    return classes;
+  }, [classes]);
 
   // Auto-update school name & NPSN if cached with old sample data
   useEffect(() => {
@@ -905,6 +893,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const authData = await authRes.json();
         if (authData.status === 'success' && authData.user) {
           setCurrentUser(authData.user);
+          try {
+            localStorage.setItem('sms_last_active_timestamp', String(Date.now()));
+          } catch (e) {}
           logAction('LOGIN', 'Autentikasi', `Login berhasil via MySQL: ${authData.user.full_name} (${authData.user.role})`);
           showToast('Login Berhasil', `Selamat datang kembali, ${authData.user.full_name}!`);
           return true;
@@ -1021,6 +1012,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     setCurrentUser(matchedProfile);
+    try {
+      localStorage.setItem('sms_last_active_timestamp', String(Date.now()));
+    } catch (e) {}
     logAction('LOGIN', 'Autentikasi', `User ${matchedProfile.full_name} (${matchedProfile.role}) berhasil masuk`);
     showToast('Login Berhasil', `Selamat datang kembali, ${matchedProfile.full_name}!`);
     return true;
@@ -1029,8 +1023,89 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const logout = () => {
     logAction('LOGOUT', 'Autentikasi', `User ${currentUser?.full_name} keluar dari sistem`);
     setCurrentUser(null);
+    try {
+      localStorage.removeItem('sms_current_user');
+      localStorage.removeItem('sms_last_active_timestamp');
+    } catch (e) {}
     showToast('Logout Berhasil', 'Anda telah keluar dari aplikasi.');
   };
+
+  // Sesi Otomatis Log Out: Jika tidak ada aktivitas selama 30 menit (1.800.000 ms)
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 menit
+    let timeoutId: any;
+
+    const performAutoLogout = () => {
+      setCurrentUser(null);
+      try {
+        localStorage.removeItem('sms_current_user');
+        localStorage.removeItem('sms_last_active_timestamp');
+      } catch (e) {}
+      showToast(
+        'Sesi Berakhir',
+        'Anda telah keluar otomatis dari aplikasi karena tidak ada aktivitas selama 30 menit.',
+        'warning'
+      );
+    };
+
+    const resetTimer = () => {
+      clearTimeout(timeoutId);
+      const now = Date.now();
+      try {
+        localStorage.setItem('sms_last_active_timestamp', String(now));
+      } catch (e) {}
+      timeoutId = setTimeout(performAutoLogout, INACTIVITY_TIMEOUT_MS);
+    };
+
+    // Periksa apakah waktu aktivitas terakhir telah kadaluarsa saat halaman dimuat/kembali
+    const storedLastActive = localStorage.getItem('sms_last_active_timestamp');
+    if (storedLastActive) {
+      const elapsed = Date.now() - Number(storedLastActive);
+      if (elapsed >= INACTIVITY_TIMEOUT_MS) {
+        performAutoLogout();
+        return;
+      }
+      timeoutId = setTimeout(performAutoLogout, INACTIVITY_TIMEOUT_MS - elapsed);
+    } else {
+      resetTimer();
+    }
+
+    // Pantau interaksi pengguna dengan throttling 10 detik agar hemat performa
+    let lastThrottledTime = Date.now();
+    const handleUserActivity = () => {
+      const now = Date.now();
+      if (now - lastThrottledTime > 10000) {
+        lastThrottledTime = now;
+        resetTimer();
+      }
+    };
+
+    // Deteksi jika pengguna kembali ke tab browser setelah ditinggal lama (>30 menit)
+    const checkExpirationOnFocus = () => {
+      const lastActive = localStorage.getItem('sms_last_active_timestamp');
+      if (lastActive && Date.now() - Number(lastActive) >= INACTIVITY_TIMEOUT_MS) {
+        performAutoLogout();
+      }
+    };
+
+    const activityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    activityEvents.forEach((evt) => {
+      window.addEventListener(evt, handleUserActivity, { passive: true });
+    });
+    window.addEventListener('focus', checkExpirationOnFocus);
+    document.addEventListener('visibilitychange', checkExpirationOnFocus);
+
+    return () => {
+      clearTimeout(timeoutId);
+      activityEvents.forEach((evt) => {
+        window.removeEventListener(evt, handleUserActivity);
+      });
+      window.removeEventListener('focus', checkExpirationOnFocus);
+      document.removeEventListener('visibilitychange', checkExpirationOnFocus);
+    };
+  }, [currentUser]);
 
   const switchRole = (newRole: UserRole) => {
     const found = profiles.find(p => p.role === newRole);

@@ -22,8 +22,12 @@ export const TeacherDashboard: React.FC<{ onNavigate: (tab: string) => void }> =
   );
 
   const myClassIds = Array.from(new Set(teacherSchedules.map(s => s.class_id)));
-  const myClasses = classes.filter(c => myClassIds.includes(c.id) || c.homeroom_teacher_name === teacherName);
-  const myStudents = students.filter(s => myClassIds.includes(s.class_id || ''));
+  const myClasses = myClassIds.length > 0 
+    ? classes.filter(c => myClassIds.includes(c.id) || c.homeroom_teacher_name === teacherName)
+    : classes;
+  const myStudents = myClassIds.length > 0
+    ? students.filter(s => myClassIds.includes(s.class_id || ''))
+    : students;
 
   // Assignments created by this teacher
   const myAssignments = assignments.filter(a => a.teacher_name === teacherName);
