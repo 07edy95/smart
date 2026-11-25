@@ -36,12 +36,14 @@ export const ClassModule: React.FC = () => {
 
   const handleOpenAdd = () => {
     setSelectedClass(null);
+    const initialTeacher = teachers[0];
     setFormData({
-      code: 'X-IPS-1',
-      name: 'Kelas X IPS 1',
+      code: '',
+      name: '',
       grade_level: 'X',
-      major: 'IPS',
-      homeroom_teacher_id: teachers[0]?.id || '',
+      major: 'Umum',
+      homeroom_teacher_id: initialTeacher?.id || '',
+      homeroom_teacher_name: initialTeacher?.full_name || '',
       capacity: 36,
     });
     setIsModalOpen(true);
@@ -49,7 +51,13 @@ export const ClassModule: React.FC = () => {
 
   const handleOpenEdit = (cls: ClassRoom) => {
     setSelectedClass(cls);
-    setFormData({ ...cls });
+    const teacher = teachers.find(t => t.id === cls.homeroom_teacher_id) || 
+      (cls.homeroom_teacher_name ? teachers.find(t => t.full_name.toLowerCase().trim() === cls.homeroom_teacher_name?.toLowerCase().trim()) : null);
+    setFormData({ 
+      ...cls,
+      homeroom_teacher_id: cls.homeroom_teacher_id || teacher?.id || '',
+      homeroom_teacher_name: teacher?.full_name || cls.homeroom_teacher_name || ''
+    });
     setIsModalOpen(true);
   };
 
@@ -60,10 +68,15 @@ export const ClassModule: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const teacher = teachers.find(t => t.id === formData.homeroom_teacher_id);
+    const payload = {
+      ...formData,
+      homeroom_teacher_name: teacher ? teacher.full_name : (formData.homeroom_teacher_name || '')
+    };
     if (selectedClass) {
-      updateClass(selectedClass.id, formData);
+      updateClass(selectedClass.id, payload);
     } else {
-      addClass(formData as Omit<ClassRoom, 'id'>);
+      addClass(payload as Omit<ClassRoom, 'id'>);
     }
     setIsModalOpen(false);
   };
@@ -89,11 +102,16 @@ export const ClassModule: React.FC = () => {
     },
     {
       header: 'Wali Kelas',
-      cell: (c) => (
-        <p className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
-          {c.homeroom_teacher_name || 'Belum Ditentukan'}
-        </p>
-      ),
+      cell: (c) => {
+        const teacher = teachers.find(t => t.id === c.homeroom_teacher_id) || 
+          (c.homeroom_teacher_name ? teachers.find(t => t.full_name.toLowerCase().trim() === c.homeroom_teacher_name?.toLowerCase().trim()) : null);
+        const teacherName = teacher?.full_name || c.homeroom_teacher_name || 'Belum Ditentukan';
+        return (
+          <p className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+            {teacherName}
+          </p>
+        );
+      },
     },
     {
       header: 'Kapasitas & Siswa',
@@ -240,8 +258,16 @@ export const ClassModule: React.FC = () => {
               Wali Kelas Pengampu
             </label>
             <select
-              value={formData.homeroom_teacher_id}
-              onChange={(e) => setFormData({ ...formData, homeroom_teacher_id: e.target.value })}
+              value={formData.homeroom_teacher_id || ''}
+              onChange={(e) => {
+                const tid = e.target.value;
+                const t = teachers.find(x => x.id === tid);
+                setFormData({
+                  ...formData,
+                  homeroom_teacher_id: tid,
+                  homeroom_teacher_name: t?.full_name || ''
+                });
+              }}
               className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none"
             >
               <option value="">Pilih Guru Wali Kelas</option>

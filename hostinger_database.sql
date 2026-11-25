@@ -16,6 +16,8 @@ SET time_zone = "+07:00";
 DROP TABLE IF EXISTS `profiles`;
 CREATE TABLE `profiles` (
   `id` VARCHAR(36) NOT NULL,
+  `username` VARCHAR(100) DEFAULT NULL,
+  `password` VARCHAR(255) DEFAULT NULL,
   `email` VARCHAR(191) NOT NULL,
   `full_name` VARCHAR(255) NOT NULL,
   `role` ENUM('admin', 'guru', 'siswa') NOT NULL DEFAULT 'admin',
@@ -96,6 +98,8 @@ DROP TABLE IF EXISTS `teachers`;
 CREATE TABLE `teachers` (
   `id` VARCHAR(36) NOT NULL,
   `profile_id` VARCHAR(36) DEFAULT NULL,
+  `username` VARCHAR(100) DEFAULT NULL,
+  `password` VARCHAR(255) DEFAULT NULL,
   `nip` VARCHAR(50) DEFAULT NULL,
   `nuptk` VARCHAR(50) DEFAULT NULL,
   `full_name` VARCHAR(255) NOT NULL,
@@ -126,6 +130,7 @@ CREATE TABLE `classes` (
   `grade_level` VARCHAR(10) NOT NULL,
   `major` VARCHAR(50) DEFAULT NULL,
   `homeroom_teacher_id` VARCHAR(36) DEFAULT NULL,
+  `homeroom_teacher_name` VARCHAR(255) DEFAULT NULL,
   `academic_year_id` VARCHAR(36) DEFAULT NULL,
   `capacity` INT NOT NULL DEFAULT 36,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -147,6 +152,9 @@ CREATE TABLE `subjects` (
   `category` VARCHAR(50) DEFAULT 'Wajib',
   `hours_per_week` INT NOT NULL DEFAULT 2,
   `grade_level` VARCHAR(50) DEFAULT 'Semua',
+  `teacher_id` VARCHAR(36) DEFAULT NULL,
+  `teacher_name` VARCHAR(255) DEFAULT NULL,
+  `passing_grade` INT DEFAULT 75,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -158,6 +166,8 @@ DROP TABLE IF EXISTS `students`;
 CREATE TABLE `students` (
   `id` VARCHAR(36) NOT NULL,
   `profile_id` VARCHAR(36) DEFAULT NULL,
+  `username` VARCHAR(100) DEFAULT NULL,
+  `password` VARCHAR(255) DEFAULT NULL,
   `nis` VARCHAR(50) NOT NULL,
   `nisn` VARCHAR(50) NOT NULL,
   `full_name` VARCHAR(255) NOT NULL,
@@ -171,6 +181,7 @@ CREATE TABLE `students` (
   `parent_phone` VARCHAR(50) DEFAULT NULL,
   `enrollment_year` VARCHAR(10) DEFAULT '2025',
   `class_id` VARCHAR(36) DEFAULT NULL,
+  `class_name` VARCHAR(100) DEFAULT NULL,
   `status` ENUM('aktif', 'lulus', 'pindah', 'keluar') NOT NULL DEFAULT 'aktif',
   `photo_url` TEXT DEFAULT NULL,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

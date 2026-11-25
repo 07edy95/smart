@@ -97,26 +97,35 @@ export const ScheduleModule: React.FC = () => {
     },
     {
       header: 'Mata Pelajaran',
-      cell: (s) => (
-        <div>
-          <p className="font-bold text-slate-900 dark:text-white text-xs">{s.subject_name}</p>
-          <p className="text-[11px] text-slate-400">{s.room || 'Ruang Kelas'}</p>
-        </div>
-      ),
+      cell: (s) => {
+        const sbj = subjects.find(sub => sub.id === s.subject_id);
+        return (
+          <div>
+            <p className="font-bold text-slate-900 dark:text-white text-xs">{sbj?.name || s.subject_name || '-'}</p>
+            <p className="text-[11px] text-slate-400">{s.room || 'Ruang Kelas'}</p>
+          </div>
+        );
+      },
     },
     {
       header: 'Rombel / Kelas',
-      cell: (s) => (
-        <span className="px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-semibold">
-          {s.class_name}
-        </span>
-      ),
+      cell: (s) => {
+        const cls = classes.find(c => c.id === s.class_id);
+        return (
+          <span className="px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-semibold">
+            {cls?.name || s.class_name || '-'}
+          </span>
+        );
+      },
     },
     {
       header: 'Guru Pengampu',
-      cell: (s) => (
-        <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">{s.teacher_name}</p>
-      ),
+      cell: (s) => {
+        const tch = teachers.find(t => t.id === s.teacher_id);
+        return (
+          <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">{tch?.full_name || s.teacher_name || '-'}</p>
+        );
+      },
     },
     {
       header: 'Aksi',
@@ -251,22 +260,26 @@ export const ScheduleModule: React.FC = () => {
 
                   <div className="space-y-2.5 flex-1 overflow-y-auto max-h-96">
                     {daySchedules.length > 0 ? (
-                      daySchedules.map((sch) => (
-                        <div
-                          key={sch.id}
-                          className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 space-y-1.5 hover:shadow-sm transition-all"
-                        >
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-extrabold text-slate-900 dark:text-white">
-                              {sch.subject_name}
-                            </span>
-                            <span className="text-[10px] px-2 py-0.5 rounded-md font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-                              {sch.start_time} - {sch.end_time}
-                            </span>
-                          </div>
+                      daySchedules.map((sch) => {
+                        const sbj = subjects.find(sub => sub.id === sch.subject_id);
+                        const cls = classes.find(c => c.id === sch.class_id);
+                        const tch = teachers.find(t => t.id === sch.teacher_id);
+                        return (
+                          <div
+                            key={sch.id}
+                            className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 space-y-1.5 hover:shadow-sm transition-all"
+                          >
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-extrabold text-slate-900 dark:text-white">
+                                {sbj?.name || sch.subject_name || 'Mata Pelajaran'}
+                              </span>
+                              <span className="text-[10px] px-2 py-0.5 rounded-md font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                                {sch.start_time} - {sch.end_time}
+                              </span>
+                            </div>
 
-                          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-                            <span>{sch.class_name} • {sch.room || 'Kelas'}</span>
+                            <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                              <span>{cls?.name || sch.class_name || 'Rombel'} • {sch.room || 'Kelas'} • {tch?.full_name || sch.teacher_name || ''}</span>
                             {isAdmin && (
                               <div className="flex items-center gap-1">
                                 <button
@@ -285,10 +298,11 @@ export const ScheduleModule: React.FC = () => {
                             )}
                           </div>
                           <p className="text-[11px] font-medium text-slate-700 dark:text-slate-300">
-                            Pengampu: {sch.teacher_name}
+                            Pengampu: {tch?.full_name || sch.teacher_name || '-'}
                           </p>
                         </div>
-                      ))
+                      );
+                    })
                     ) : (
                       <div className="py-8 text-center text-xs text-slate-400">
                         Tidak ada sesi belajar pada hari ini.

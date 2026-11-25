@@ -149,7 +149,9 @@ export const AssignmentModule: React.FC = () => {
           </div>
           <div>
             <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm">{a.title}</h4>
-            <p className="text-[11px] text-slate-500">{a.subject_name} • {a.class_name}</p>
+            <p className="text-[11px] text-slate-500">
+              {(subjects.find(s => s.id === a.subject_id)?.name || a.subject_name)} • {(classes.find(c => c.id === a.class_id)?.name || a.class_name || 'Semua Kelas')}
+            </p>
           </div>
         </div>
       ),
@@ -166,7 +168,9 @@ export const AssignmentModule: React.FC = () => {
     {
       header: 'Guru Pengampu',
       cell: (a) => (
-        <span className="text-xs font-medium text-slate-600 dark:text-slate-300">{a.teacher_name}</span>
+        <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+          {teachers.find(t => t.id === a.teacher_id)?.full_name || a.teacher_name}
+        </span>
       ),
     },
     {

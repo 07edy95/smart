@@ -312,18 +312,22 @@ export const SubjectModule: React.FC = () => {
     },
     {
       header: 'Guru Pengampu',
-      cell: (s) => (
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xs font-bold flex-shrink-0">
-            <UserCheck className="w-3.5 h-3.5" />
+      cell: (s) => {
+        const teacher = teachers.find(t => t.id === s.teacher_id);
+        const teacherName = teacher?.full_name || s.teacher_name;
+        return (
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xs font-bold flex-shrink-0">
+              <UserCheck className="w-3.5 h-3.5" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                {teacherName || <span className="text-slate-400 font-normal italic">Belum ditentukan</span>}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-              {s.teacher_name || <span className="text-slate-400 font-normal italic">Belum ditentukan</span>}
-            </p>
-          </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       header: 'Kelompok / Kategori',

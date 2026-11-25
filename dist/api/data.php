@@ -95,7 +95,94 @@ function generateUuid() {
     );
 }
 
+// Auto-migration helper: memastikan kolom pendukung relasi ada di MySQL tanpa merusak data
+function ensureColumnsExist($pdo) {
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+
+    $columnsToAdd = [
+        'classes' => [
+            ['homeroom_teacher_name', 'VARCHAR(255) DEFAULT NULL AFTER `homeroom_teacher_id`']
+        ],
+        'students' => [
+            ['class_name', 'VARCHAR(100) DEFAULT NULL AFTER `class_id`'],
+            ['username', 'VARCHAR(100) DEFAULT NULL AFTER `profile_id`'],
+            ['password', 'VARCHAR(255) DEFAULT NULL AFTER `username`']
+        ],
+        'teachers' => [
+            ['username', 'VARCHAR(100) DEFAULT NULL AFTER `profile_id`'],
+            ['password', 'VARCHAR(255) DEFAULT NULL AFTER `username`']
+        ],
+        'profiles' => [
+            ['username', 'VARCHAR(100) DEFAULT NULL AFTER `id`'],
+            ['password', 'VARCHAR(255) DEFAULT NULL AFTER `username`']
+        ],
+        'subjects' => [
+            ['teacher_id', 'VARCHAR(36) DEFAULT NULL AFTER `grade_level`'],
+            ['teacher_name', 'VARCHAR(255) DEFAULT NULL AFTER `teacher_id`'],
+            ['passing_grade', 'INT DEFAULT 75 AFTER `teacher_name`']
+        ],
+        'schedules' => [
+            ['class_name', 'VARCHAR(100) DEFAULT NULL AFTER `class_id`'],
+            ['subject_name', 'VARCHAR(100) DEFAULT NULL AFTER `subject_id`'],
+            ['teacher_name', 'VARCHAR(255) DEFAULT NULL AFTER `teacher_id`']
+        ],
+        'student_attendance' => [
+            ['student_name', 'VARCHAR(255) DEFAULT NULL AFTER `student_id`'],
+            ['class_name', 'VARCHAR(100) DEFAULT NULL AFTER `class_id`'],
+            ['subject_name', 'VARCHAR(100) DEFAULT NULL AFTER `subject_id`']
+        ],
+        'assignments' => [
+            ['class_name', 'VARCHAR(100) DEFAULT NULL AFTER `class_id`'],
+            ['subject_name', 'VARCHAR(100) DEFAULT NULL AFTER `subject_id`'],
+            ['teacher_name', 'VARCHAR(255) DEFAULT NULL AFTER `teacher_id`']
+        ],
+        'learning_materials' => [
+            ['class_name', 'VARCHAR(100) DEFAULT NULL AFTER `class_id`'],
+            ['subject_name', 'VARCHAR(100) DEFAULT NULL AFTER `subject_id`'],
+            ['teacher_name', 'VARCHAR(255) DEFAULT NULL AFTER `teacher_id`'],
+            ['category', 'VARCHAR(50) DEFAULT \'Modul\' AFTER `title`']
+        ],
+        'exams' => [
+            ['class_name', 'VARCHAR(100) DEFAULT NULL AFTER `class_id`'],
+            ['subject_name', 'VARCHAR(100) DEFAULT NULL AFTER `subject_id`'],
+            ['supervisor_name', 'VARCHAR(255) DEFAULT NULL AFTER `proctor_teacher_id`'],
+            ['supervisor_teacher_id', 'VARCHAR(36) DEFAULT NULL AFTER `proctor_teacher_id`']
+        ],
+        'grades' => [
+            ['student_name', 'VARCHAR(255) DEFAULT NULL AFTER `student_id`'],
+            ['subject_id', 'VARCHAR(36) DEFAULT NULL AFTER `grade_component_id`'],
+            ['subject_name', 'VARCHAR(100) DEFAULT NULL AFTER `subject_id`'],
+            ['class_id', 'VARCHAR(36) DEFAULT NULL AFTER `subject_name`'],
+            ['class_name', 'VARCHAR(100) DEFAULT NULL AFTER `class_id`'],
+            ['component_id', 'VARCHAR(36) DEFAULT NULL AFTER `grade_component_id`'],
+            ['component_name', 'VARCHAR(100) DEFAULT NULL AFTER `component_id`']
+        ]
+    ];
+
+    foreach ($columnsToAdd as $tbl => $cols) {
+        try {
+            $tableCheck = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($tbl));
+            if ($tableCheck && $tableCheck->rowCount() > 0) {
+                foreach ($cols as $colDef) {
+                    $colName = $colDef[0];
+                    $colSpec = $colDef[1];
+                    $checkCol = $pdo->query("SHOW COLUMNS FROM `{$tbl}` LIKE '{$colName}'");
+                    if ($checkCol && $checkCol->rowCount() === 0) {
+                        $pdo->exec("ALTER TABLE `{$tbl}` ADD COLUMN `{$colName}` {$colSpec}");
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            // Abaikan kegagalan alter table secara silent agar proses API utama tetap berjalan
+        }
+    }
+}
+
 try {
+    // Jalankan auto-migration kolom relasi penting
+    ensureColumnsExist($pdo);
     // Periksa apakah tabel benar-benar ada di database
     $tableCheck = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($table));
     if ($tableCheck->rowCount() === 0) {

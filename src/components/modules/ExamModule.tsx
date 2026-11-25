@@ -72,7 +72,7 @@ export const ExamModule: React.FC = () => {
           </div>
           <div>
             <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm">{e.title}</h4>
-            <p className="text-[11px] text-slate-500">{e.subject_name}</p>
+            <p className="text-[11px] text-slate-500">{subjects.find(s => s.id === e.subject_id)?.name || e.subject_name}</p>
           </div>
         </div>
       ),
@@ -109,7 +109,9 @@ export const ExamModule: React.FC = () => {
       header: 'Pengawas & Ruangan',
       cell: (e) => (
         <div className="text-xs">
-          <p className="font-semibold text-slate-800 dark:text-white">{e.supervisor_name || 'Pengawas Ruang'}</p>
+          <p className="font-semibold text-slate-800 dark:text-white">
+            {teachers.find(t => t.id === e.supervisor_teacher_id)?.full_name || e.supervisor_name || 'Pengawas Ruang'}
+          </p>
           <p className="text-slate-400 flex items-center gap-1">
             <MapPin className="w-3 h-3 text-emerald-500" />
             {e.room}

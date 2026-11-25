@@ -28,7 +28,7 @@ import {
   insertBulkToHostinger, 
   testHostingerConnection 
 } from '../lib/hostingerApi';
-import { generateUsername, getDefaultPassword } from '../utils/helpers';
+import { generateUsername, getDefaultPassword, resolveClass } from '../utils/helpers';
 
 export interface ToastMessage {
   id: string;
@@ -580,7 +580,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           remoteSchedules,
           remoteSchoolSettings,
           remoteAcademicYears,
-          remoteSemesters
+          remoteSemesters,
+          remoteStudentAttendance,
+          remoteTeacherAttendance,
+          remoteGradeComponents,
+          remoteGrades,
+          remoteAssignments,
+          remoteSubmissions,
+          remoteLearningMaterials,
+          remoteExams,
+          remoteAnnouncements
         ] = await Promise.all([
           fetchFromHostinger('profiles'),
           fetchFromHostinger('teachers'),
@@ -590,40 +599,201 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fetchFromHostinger('schedules'),
           fetchFromHostinger('school_settings'),
           fetchFromHostinger('academic_years'),
-          fetchFromHostinger('semesters')
+          fetchFromHostinger('semesters'),
+          fetchFromHostinger('student_attendance'),
+          fetchFromHostinger('teacher_attendance'),
+          fetchFromHostinger('grade_components'),
+          fetchFromHostinger('grades'),
+          fetchFromHostinger('assignments'),
+          fetchFromHostinger('assignment_submissions'),
+          fetchFromHostinger('learning_materials'),
+          fetchFromHostinger('exams'),
+          fetchFromHostinger('announcements')
         ]);
 
-        // 1. Data Guru (Teachers) - Database MySQL sebagai Single Source of Truth
+        // 1. Data Guru (Teachers)
+        const teacherList = Array.isArray(remoteTeachers) ? remoteTeachers : teachers;
         if (Array.isArray(remoteTeachers)) {
           setTeachers(remoteTeachers);
         }
 
-        // 2. Data Siswa (Students) - Database MySQL sebagai Single Source of Truth
-        if (Array.isArray(remoteStudents)) {
-          setStudents(remoteStudents);
-        }
-
-        // 3. Data Kelas (Classes) - Database MySQL sebagai Single Source of Truth
+        // 2. Data Kelas (Classes) - Hidrasi nama wali kelas dari ID guru
+        const classList = Array.isArray(remoteClasses) ? remoteClasses.map(c => {
+          const teacher = teacherList.find(t => t.id === c.homeroom_teacher_id);
+          return {
+            ...c,
+            homeroom_teacher_name: teacher ? teacher.full_name : (c.homeroom_teacher_name || '')
+          };
+        }) : classes;
         if (Array.isArray(remoteClasses)) {
-          setClasses(remoteClasses);
+          setClasses(classList);
         }
 
-        // 4. Data Mata Pelajaran (Subjects) - Database MySQL sebagai Single Source of Truth
+        // 3. Data Siswa (Students) - Hidrasi nama kelas dari ID kelas
+        const studentList = Array.isArray(remoteStudents) ? remoteStudents.map(s => {
+          const cls = classList.find(c => c.id === s.class_id);
+          return {
+            ...s,
+            class_name: cls ? cls.name : (s.class_name || '')
+          };
+        }) : students;
+        if (Array.isArray(remoteStudents)) {
+          setStudents(studentList);
+        }
+
+        // 4. Data Mata Pelajaran (Subjects) - Hidrasi nama guru pengampu
+        const subjectList = Array.isArray(remoteSubjects) ? remoteSubjects.map(sbj => {
+          const teacher = teacherList.find(t => t.id === sbj.teacher_id);
+          return {
+            ...sbj,
+            teacher_name: teacher ? teacher.full_name : (sbj.teacher_name || '')
+          };
+        }) : subjects;
         if (Array.isArray(remoteSubjects)) {
-          setSubjects(remoteSubjects);
+          setSubjects(subjectList);
         }
 
-        // 5. Data Jadwal (Schedules) - Database MySQL sebagai Single Source of Truth
+        // 5. Data Jadwal (Schedules) - Hidrasi nama kelas, mapel, dan guru
         if (Array.isArray(remoteSchedules)) {
-          setSchedules(remoteSchedules);
+          const scheduleList = remoteSchedules.map(sch => {
+            const cls = classList.find(c => c.id === sch.class_id);
+            const sbj = subjectList.find(s => s.id === sch.subject_id);
+            const tch = teacherList.find(t => t.id === sch.teacher_id);
+            return {
+              ...sch,
+              class_name: cls ? cls.name : (sch.class_name || ''),
+              subject_name: sbj ? sbj.name : (sch.subject_name || ''),
+              teacher_name: tch ? tch.full_name : (sch.teacher_name || '')
+            };
+          });
+          setSchedules(scheduleList);
         }
 
-        // 6. Pengaturan Sekolah (School Settings)
+        // 6. Presensi Siswa & Guru
+        if (Array.isArray(remoteStudentAttendance)) {
+          const attList = remoteStudentAttendance.map(att => {
+            const std = studentList.find(s => s.id === att.student_id);
+            const cls = classList.find(c => c.id === att.class_id);
+            const sbj = subjectList.find(s => s.id === att.subject_id);
+            return {
+              ...att,
+              student_name: std ? std.full_name : (att.student_name || ''),
+              class_name: cls ? cls.name : (att.class_name || ''),
+              subject_name: sbj ? sbj.name : (att.subject_name || '')
+            };
+          });
+          setStudentAttendance(attList);
+        }
+        if (Array.isArray(remoteTeacherAttendance)) {
+          setTeacherAttendance(remoteTeacherAttendance);
+        }
+
+        // 7. Komponen Nilai & Nilai Siswa
+        const componentList = Array.isArray(remoteGradeComponents) ? remoteGradeComponents.map(gc => {
+          const sbj = subjectList.find(s => s.id === gc.subject_id);
+          const cls = classList.find(c => c.id === gc.class_id);
+          return {
+            ...gc,
+            subject_name: sbj ? sbj.name : (gc.subject_name || ''),
+            class_name: cls ? cls.name : (gc.class_name || '')
+          };
+        }) : gradeComponents;
+        if (Array.isArray(remoteGradeComponents)) {
+          setGradeComponents(componentList);
+        }
+
+        if (Array.isArray(remoteGrades)) {
+          const gradeList = remoteGrades.map(g => {
+            const comp = componentList.find(c => c.id === g.grade_component_id || c.id === g.component_id);
+            const std = studentList.find(s => s.id === g.student_id);
+            const sbj = subjectList.find(s => s.id === (g.subject_id || comp?.subject_id));
+            const cls = classList.find(c => c.id === (g.class_id || comp?.class_id));
+            return {
+              ...g,
+              component_id: g.component_id || g.grade_component_id,
+              component_name: comp ? comp.name : (g.component_name || ''),
+              student_name: std ? std.full_name : (g.student_name || ''),
+              subject_id: g.subject_id || comp?.subject_id || '',
+              subject_name: sbj ? sbj.name : (g.subject_name || ''),
+              class_id: g.class_id || comp?.class_id || '',
+              class_name: cls ? cls.name : (g.class_name || ''),
+              score: Number(g.score) || 0
+            };
+          });
+          setGrades(gradeList);
+        }
+
+        // 8. Tugas (Assignments) & Pengumpulan (Submissions)
+        if (Array.isArray(remoteAssignments)) {
+          const assignmentList = remoteAssignments.map(a => {
+            const cls = classList.find(c => c.id === a.class_id);
+            const sbj = subjectList.find(s => s.id === a.subject_id);
+            const tch = teacherList.find(t => t.id === a.teacher_id);
+            return {
+              ...a,
+              class_name: cls ? cls.name : (a.class_name || ''),
+              subject_name: sbj ? sbj.name : (a.subject_name || ''),
+              teacher_name: tch ? tch.full_name : (a.teacher_name || '')
+            };
+          });
+          setAssignments(assignmentList);
+        }
+        if (Array.isArray(remoteSubmissions)) {
+          const submissionList = remoteSubmissions.map(sub => {
+            const std = studentList.find(s => s.id === sub.student_id);
+            return {
+              ...sub,
+              student_name: std ? std.full_name : (sub.student_name || '')
+            };
+          });
+          setSubmissions(submissionList);
+        }
+
+        // 9. Materi Pembelajaran (Learning Materials)
+        if (Array.isArray(remoteLearningMaterials)) {
+          const matList = remoteLearningMaterials.map(m => {
+            const cls = classList.find(c => c.id === m.class_id);
+            const sbj = subjectList.find(s => s.id === m.subject_id);
+            const tch = teacherList.find(t => t.id === m.teacher_id);
+            return {
+              ...m,
+              class_name: cls ? cls.name : (m.class_name || ''),
+              subject_name: sbj ? sbj.name : (m.subject_name || ''),
+              teacher_name: tch ? tch.full_name : (m.teacher_name || '')
+            };
+          });
+          setLearningMaterials(matList);
+        }
+
+        // 10. Ujian & CBT (Exams)
+        if (Array.isArray(remoteExams)) {
+          const examList = remoteExams.map(e => {
+            const cls = classList.find(c => c.id === e.class_id);
+            const sbj = subjectList.find(s => s.id === e.subject_id);
+            const tch = teacherList.find(t => t.id === (e.proctor_teacher_id || e.supervisor_teacher_id));
+            return {
+              ...e,
+              date: e.exam_date || e.date,
+              supervisor_teacher_id: e.proctor_teacher_id || e.supervisor_teacher_id,
+              supervisor_name: tch ? tch.full_name : (e.supervisor_name || ''),
+              class_name: cls ? cls.name : (e.class_name || ''),
+              subject_name: sbj ? sbj.name : (e.subject_name || '')
+            };
+          });
+          setExams(examList);
+        }
+
+        // 11. Pengumuman (Announcements)
+        if (Array.isArray(remoteAnnouncements)) {
+          setAnnouncements(remoteAnnouncements);
+        }
+
+        // 12. Pengaturan Sekolah (School Settings)
         if (Array.isArray(remoteSchoolSettings) && remoteSchoolSettings.length > 0) {
           setSchoolSettings(prev => ({ ...prev, ...remoteSchoolSettings[0] }));
         }
 
-        // 7. Tahun Ajaran & Semester
+        // 13. Tahun Ajaran & Semester
         if (Array.isArray(remoteAcademicYears) && remoteAcademicYears.length > 0) {
           setAcademicYears(remoteAcademicYears);
         }
@@ -631,7 +801,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setSemesters(remoteSemesters);
         }
 
-        // 8. Profil Pengguna (Profiles)
+        // 14. Profil Pengguna (Profiles)
         if (Array.isArray(remoteProfiles)) {
           const mergedProfiles = [...initialProfiles];
           remoteProfiles.forEach(rp => {
@@ -932,7 +1102,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newClass: ClassRoom = {
       ...data,
       id,
-      homeroom_teacher_name: teacher?.full_name,
+      homeroom_teacher_id: data.homeroom_teacher_id || teacher?.id || '',
+      homeroom_teacher_name: teacher ? teacher.full_name : (data.homeroom_teacher_name || ''),
       student_count: 0
     };
     setClasses(prev => [...prev, newClass]);
@@ -943,12 +1114,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateClass = (id: string, data: Partial<ClassRoom>) => {
     const teacher = teachers.find(t => t.id === data.homeroom_teacher_id);
+    const updatedPayload: Partial<ClassRoom> = {
+      ...data,
+      homeroom_teacher_name: teacher ? teacher.full_name : (data.homeroom_teacher_name || '')
+    };
     setClasses(prev => prev.map(c => c.id === id ? {
       ...c,
-      ...data,
-      homeroom_teacher_name: teacher ? teacher.full_name : c.homeroom_teacher_name
+      ...updatedPayload,
+      homeroom_teacher_name: teacher ? teacher.full_name : (updatedPayload.homeroom_teacher_name || c.homeroom_teacher_name)
     } : c));
-    updateInHostinger('classes', id, data);
+    updateInHostinger('classes', id, updatedPayload);
     logAction('UPDATE', 'Data Kelas', `Memperbarui kelas ${id}`);
     showToast('Berhasil', 'Data rombel/kelas berhasil disimpan.');
   };
@@ -1234,7 +1409,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const importStudents = async (studentsList: Omit<Student, 'id'>[]) => {
     const newProfiles: Profile[] = [];
     const newStudents: Student[] = studentsList.map((item, index) => {
-      const cls = classes.find(c => c.id === item.class_id || c.name.toLowerCase() === (item.class_name || '').toLowerCase());
+      const cls = resolveClass(item.class_name, classes, item.class_id) || classes.find(c => c.id === item.class_id) || classes[0];
       const studentId = 'std-' + Date.now() + '-' + index;
       const profileId = 'usr-std-' + Date.now() + '-' + index;
       const baseUsername = item.username || generateUsername(item.full_name) || `siswa${item.nisn || index}`;
@@ -1264,8 +1439,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         username,
         password,
         profile_id: profileId,
-        class_id: cls?.id || item.class_id,
-        class_name: cls?.name || item.class_name
+        class_id: cls?.id || item.class_id || classes[0]?.id,
+        class_name: cls?.name || item.class_name || classes[0]?.name
       };
     });
 

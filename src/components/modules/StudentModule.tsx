@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { DataTable, Column } from '../common/DataTable';
 import { Modal } from '../common/Modal';
 import { Student } from '../../types/database';
-import { formatDate, parseExcelFile, exportToExcel, generateUsername, getDefaultPassword } from '../../utils/helpers';
+import { formatDate, parseExcelFile, exportToExcel, generateUsername, getDefaultPassword, resolveClass } from '../../utils/helpers';
 import { 
   GraduationCap, Eye, Edit3, Trash2, Upload, Download,
   FileSpreadsheet, Phone, Users, CheckCircle2, AlertCircle,
@@ -160,6 +160,22 @@ export const StudentModule: React.FC = () => {
     showToast('Template Diunduh', 'Berkas template Excel siswa berhasil disimpan ke komputer Anda.');
   };
 
+  // Handler perubahan dropdown Kelas Default
+  const handleBulkClassChange = (newClassId: string) => {
+    setSelectedBulkClass(newClassId);
+    if (bulkPreview.length > 0) {
+      const targetClass = classes.find(c => c.id === newClassId);
+      setBulkPreview(prev => prev.map(s => {
+        const resolved = resolveClass(s.class_name, classes, newClassId || undefined);
+        return {
+          ...s,
+          class_id: resolved?.id || (newClassId ? newClassId : s.class_id),
+          class_name: resolved?.name || (newClassId && targetClass ? targetClass.name : s.class_name)
+        };
+      }));
+    }
+  };
+
   // Handler Parse File Excel Siswa
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -180,8 +196,8 @@ export const StudentModule: React.FC = () => {
         const nisn = String(row['NISN'] || row['nisn'] || Math.floor(1000000000 + idx)).trim();
         const rawGender = String(row['Jenis Kelamin (L/P)'] || row['Jenis Kelamin'] || row['gender'] || 'L').trim().toUpperCase();
         const gender: 'L' | 'P' = rawGender.startsWith('P') ? 'P' : 'L';
-        const className = String(row['Kelas'] || row['class'] || defaultClass || '').trim();
-        const matchedClass = classes.find(c => c.name.toLowerCase() === className.toLowerCase() || c.id === selectedBulkClass);
+        const rawClassName = String(row['Kelas'] || row['class'] || row['Rombel'] || defaultClass || '').trim();
+        const matchedClass = resolveClass(rawClassName, classes, selectedBulkClass || undefined) || (selectedBulkClass ? classes.find(c => c.id === selectedBulkClass) : undefined);
         const username = generateUsername(fullName);
 
         return {
@@ -191,8 +207,8 @@ export const StudentModule: React.FC = () => {
           nis,
           nisn,
           gender,
-          class_id: matchedClass?.id,
-          class_name: matchedClass?.name || className,
+          class_id: matchedClass?.id || (selectedBulkClass || classes[0]?.id),
+          class_name: matchedClass?.name || rawClassName || (classes[0]?.name || 'Kelas X'),
           birth_place: String(row['Tempat Lahir'] || 'Serang').trim(),
           birth_date: String(row['Tanggal Lahir'] || '2009-01-01').trim(),
           religion: 'Islam',
@@ -247,8 +263,8 @@ export const StudentModule: React.FC = () => {
       const nisn = cols[2] || String(Math.floor(1000000000 + idx));
       const rawGender = (cols[3] || 'L').toUpperCase();
       const gender: 'L' | 'P' = rawGender.startsWith('P') ? 'P' : 'L';
-      const className = cols[4] || defaultClass || '';
-      const matchedClass = classes.find(c => c.name.toLowerCase() === className.toLowerCase() || c.id === selectedBulkClass);
+      const rawClassName = cols[4] || defaultClass || '';
+      const matchedClass = resolveClass(rawClassName, classes, selectedBulkClass || undefined) || (selectedBulkClass ? classes.find(c => c.id === selectedBulkClass) : undefined);
       const parentPhone = cols[5] || '';
       const username = generateUsername(fullName);
 
@@ -259,8 +275,8 @@ export const StudentModule: React.FC = () => {
         nis,
         nisn,
         gender,
-        class_id: matchedClass?.id,
-        class_name: matchedClass?.name || className,
+        class_id: matchedClass?.id || (selectedBulkClass || classes[0]?.id),
+        class_name: matchedClass?.name || rawClassName || (classes[0]?.name || 'Kelas X'),
         birth_place: 'Serang',
         birth_date: '2009-01-01',
         religion: 'Islam',
@@ -287,7 +303,18 @@ export const StudentModule: React.FC = () => {
       return;
     }
 
-    importStudents(bulkPreview);
+    const defaultClass = classes.find(c => c.id === selectedBulkClass) || classes[0];
+    const finalStudents = bulkPreview.map(item => {
+      const resolved = resolveClass(item.class_name, classes, selectedBulkClass || item.class_id);
+      const targetClass = resolved || defaultClass;
+      return {
+        ...item,
+        class_id: targetClass?.id || item.class_id || classes[0]?.id,
+        class_name: targetClass?.name || item.class_name || classes[0]?.name
+      };
+    });
+
+    importStudents(finalStudents);
     setIsBulkModalOpen(false);
     setBulkPreview([]);
     setPasteText('');
@@ -344,11 +371,15 @@ export const StudentModule: React.FC = () => {
     },
     {
       header: 'Kelas / Rombel',
-      cell: (s) => (
-        <span className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-          {s.class_name || 'Belum Ada'}
-        </span>
-      ),
+      cell: (s) => {
+        const cls = classes.find(c => c.id === s.class_id);
+        const name = cls?.name || s.class_name || 'Belum Ada';
+        return (
+          <span className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+            {name}
+          </span>
+        );
+      },
     },
     {
       header: 'L/P',
@@ -739,7 +770,7 @@ export const StudentModule: React.FC = () => {
                   {selectedStudent.full_name}
                 </h4>
                 <p className="text-xs text-blue-600 dark:text-blue-400 font-semibold mt-0.5">
-                  {selectedStudent.class_name} • Status: {selectedStudent.status}
+                  {classes.find(c => c.id === selectedStudent.class_id)?.name || selectedStudent.class_name || 'Umum'} • Status: {selectedStudent.status}
                 </p>
                 <p className="text-[11px] text-slate-500 mt-0.5">
                   NIS: {selectedStudent.nis} | NISN: {selectedStudent.nisn}
@@ -839,7 +870,7 @@ export const StudentModule: React.FC = () => {
             </div>
             <select
               value={selectedBulkClass}
-              onChange={(e) => setSelectedBulkClass(e.target.value)}
+              onChange={(e) => handleBulkClassChange(e.target.value)}
               className="text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-medium focus:outline-none"
             >
               <option value="">Otomatis Sesuai Kolom Data</option>

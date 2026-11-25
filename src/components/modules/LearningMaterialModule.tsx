@@ -9,7 +9,7 @@ import { BookOpen, Plus, Download, Trash2, FileText, Video, Presentation } from 
 export const LearningMaterialModule: React.FC = () => {
   const { 
     learningMaterials, addLearningMaterial, deleteLearningMaterial, 
-    classes, subjects, teachers, role, teacherProfile,
+    classes, subjects, teachers, role, teacherProfile, studentProfile,
     teacherSubjects, teacherClasses 
   } = useApp();
 
@@ -50,6 +50,12 @@ export const LearningMaterialModule: React.FC = () => {
         (teacherProfile && m.teacher_id === teacherProfile.id) ||
         m.teacher_name === teacherProfile?.full_name ||
         accessibleSubjects.some(s => s.id === m.subject_id)
+      )
+    : isSiswa
+    ? learningMaterials.filter(m => 
+        !m.class_id || 
+        (studentProfile?.class_id && m.class_id === studentProfile.class_id) ||
+        (studentProfile?.class_name && m.class_name === studentProfile.class_name)
       )
     : learningMaterials;
 
@@ -107,15 +113,15 @@ export const LearningMaterialModule: React.FC = () => {
       header: 'Mata Pelajaran & Kelas',
       cell: (m) => (
         <div className="text-xs">
-          <p className="font-bold text-slate-800 dark:text-white">{m.subject_name}</p>
-          <p className="text-slate-400">{m.class_name || 'Semua Kelas'}</p>
+          <p className="font-bold text-slate-800 dark:text-white">{subjects.find(s => s.id === m.subject_id)?.name || m.subject_name}</p>
+          <p className="text-slate-400">{classes.find(c => c.id === m.class_id)?.name || m.class_name || 'Semua Kelas'}</p>
         </div>
       ),
     },
     {
       header: 'Pengunggah',
       cell: (m) => (
-        <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">{m.teacher_name}</span>
+        <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">{teachers.find(t => t.id === m.teacher_id)?.full_name || m.teacher_name}</span>
       ),
     },
     {

@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { ClassRoom } from '../types/database';
 
 // Format Date as DD-MM-YYYY
 export function formatDate(dateStr?: string | Date | null): string {
@@ -129,3 +130,72 @@ export async function parseExcelFile(file: File): Promise<any[]> {
     reader.readAsBinaryString(file);
   });
 }
+
+/**
+ * Normalisasi dan pencarian rombel/kelas secara cerdas & tahan kesalahan (fuzzy matching)
+ * Menangani format: "X MIPA 1", "Kelas X MIPA 1", "X-MIPA-1", "X-1", "x mipa 1", dsb.
+ */
+export function resolveClass(
+  rawInput?: string | null,
+  classes: ClassRoom[] = [],
+  fallbackClassId?: string | null
+): ClassRoom | undefined {
+  if (!classes || classes.length === 0) return undefined;
+
+  // 1. Jika rawInput kosong atau null, gunakan fallbackClassId jika valid
+  if (!rawInput || !rawInput.trim()) {
+    if (fallbackClassId) {
+      return classes.find(c => c.id === fallbackClassId);
+    }
+    return undefined;
+  }
+
+  const clean = rawInput.trim();
+  const lower = clean.toLowerCase();
+
+  // 2. Pencocokan langsung dengan ID kelas
+  const byId = classes.find(c => c.id === clean);
+  if (byId) return byId;
+
+  // 3. Pencocokan eksak dengan Name atau Code
+  const directMatch = classes.find(c => 
+    c.name.toLowerCase() === lower || 
+    c.code.toLowerCase() === lower
+  );
+  if (directMatch) return directMatch;
+
+  // 4. Normalisasi string (hilangkan kata "kelas", "rombel", spasi, tanda minus, underscore)
+  const normalize = (str: string) => 
+    str.toLowerCase()
+       .replace(/kelas\s*/gi, '')
+       .replace(/rombel\s*/gi, '')
+       .replace(/[^a-z0-9]/gi, '');
+
+  const normInput = normalize(clean);
+  if (normInput) {
+    const byNorm = classes.find(c => 
+      normalize(c.name) === normInput || 
+      normalize(c.code) === normInput
+    );
+    if (byNorm) return byNorm;
+  }
+
+  // 5. Pencocokan substring (misal "X-1" cocok dengan "Kelas X-1" atau "X-1")
+  const bySubstring = classes.find(c => {
+    const normName = normalize(c.name);
+    const normCode = normalize(c.code);
+    return (normInput && normName.includes(normInput)) || 
+           (normInput && normInput.includes(normName)) ||
+           (normInput && normCode.includes(normInput));
+  });
+  if (bySubstring) return bySubstring;
+
+  // 6. Jika tidak ditemukan kecocokan dari nama teks, gunakan fallbackClassId
+  if (fallbackClassId) {
+    const fallback = classes.find(c => c.id === fallbackClassId);
+    if (fallback) return fallback;
+  }
+
+  return undefined;
+}
+
