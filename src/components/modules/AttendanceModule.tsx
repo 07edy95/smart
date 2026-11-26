@@ -27,6 +27,13 @@ export const AttendanceModule: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'siswa' | 'guru' | 'rekap'>('siswa');
 
+  // Pastikan tab presensi guru hanya bisa diakses admin
+  React.useEffect(() => {
+    if (!isAdmin && activeTab === 'guru') {
+      setActiveTab('siswa');
+    }
+  }, [isAdmin, activeTab]);
+
   // Siswa Attendance form state
   const [selectedClassId, setSelectedClassId] = useState<string>(accessibleClasses[0]?.id || '');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(accessibleSubjects[0]?.id || '');
@@ -282,16 +289,18 @@ export const AttendanceModule: React.FC = () => {
           >
             Presensi Siswa per Kelas
           </button>
-          <button
-            onClick={() => setActiveTab('guru')}
-            className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-xl transition-all ${
-              activeTab === 'guru'
-                ? 'bg-white dark:bg-blue-600 text-blue-600 dark:text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400'
-            }`}
-          >
-            Presensi Dewan Guru
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setActiveTab('guru')}
+              className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-xl transition-all ${
+                activeTab === 'guru'
+                  ? 'bg-white dark:bg-blue-600 text-blue-600 dark:text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400'
+              }`}
+            >
+              Presensi Dewan Guru
+            </button>
+          )}
           <button
             onClick={() => setActiveTab('rekap')}
             className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-xl transition-all ${
@@ -485,8 +494,8 @@ export const AttendanceModule: React.FC = () => {
         </div>
       )}
 
-      {/* Tab 2: Presensi Dewan Guru */}
-      {activeTab === 'guru' && (
+      {/* Tab 2: Presensi Dewan Guru (Hanya untuk Admin) */}
+      {isAdmin && activeTab === 'guru' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="clay-card p-6 space-y-4">
             <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">

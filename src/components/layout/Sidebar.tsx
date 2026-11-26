@@ -25,7 +25,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isMobileOpen,
   onCloseMobile,
 }) => {
-  const { role, currentUser, logout, schoolSettings } = useApp();
+  const { role, currentUser, logout, schoolSettings, academicYears, semesters } = useApp();
+
+  const activeAcademicYear = academicYears.find(a => a.is_active);
+  const activeSemester = semesters.find(s => s.is_active);
 
   // Navigation Items depending on Role
   const getNavItems = () => {
@@ -63,7 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'materials', label: 'Materi Pembelajaran', icon: BookOpen },
         { id: 'exams', label: 'Kelola Ujian', icon: FileText },
         { id: 'announcements', label: 'Pengumuman Kelas', icon: Megaphone },
-        { id: 'reports', label: 'Unduh Laporan Nilai', icon: BarChart3 },
+        { id: 'reports', label: 'Rekap Laporan', icon: BarChart3 },
         { id: 'my-profile', label: 'Profil & Password', icon: UserCheck },
       ];
     }
@@ -179,20 +182,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
           })}
         </div>
 
-        {/* Bottom Feature Card (Inspired by reference "Go Premium" card) */}
+        {/* Bottom Feature Card - Status Tahun Ajaran & Semester Aktif */}
         {!isCollapsed && (
           <div className="px-3 pb-2">
-            <div className="rounded-2xl p-3 bg-[#FDE9E1] dark:bg-[#38221B] border border-[#FAD2C3] dark:border-[#522E23] shadow-sm space-y-1.5">
+            <div className="rounded-2xl p-3 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 dark:from-slate-800/80 dark:to-slate-800/50 border border-blue-100/90 dark:border-slate-700/80 shadow-sm space-y-1">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-[#FF7A50] text-white flex items-center justify-center font-bold text-xs shadow-sm">
+                <div className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-sm">
                   ★
                 </div>
-                <p className="text-xs font-bold text-[#78281F] dark:text-[#FECDD3]">
-                  TA 2025/2026 Aktif
+                <p className="text-xs font-extrabold text-blue-900 dark:text-blue-300">
+                  TA {activeAcademicYear?.name || '2025/2026'} Aktif
                 </p>
               </div>
-              <p className="text-[10px] text-[#8C3A2B] dark:text-rose-200/80 leading-tight">
-                Semester Ganjil • MySQL Hostinger Online
+              <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 pl-8 leading-tight">
+                Semester {activeSemester?.name || 'Ganjil'}
               </p>
             </div>
           </div>

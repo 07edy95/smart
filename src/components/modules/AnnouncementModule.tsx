@@ -9,17 +9,29 @@ import { Megaphone, Calendar, Plus, Trash2, Bell, Tag, Sparkles } from 'lucide-r
 export const AnnouncementModule: React.FC = () => {
   const { 
     announcements, addAnnouncement, deleteAnnouncement, 
-    events, addEvent, deleteEvent, role, currentUser 
+    events, addEvent, deleteEvent, role, currentUser, classes, studentProfile 
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'announcements' | 'events'>('announcements');
   const [isAnnModalOpen, setIsAnnModalOpen] = useState(false);
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
 
+  const isAdmin = role === 'admin';
+  const isGuru = role === 'guru';
+  const isSiswa = role === 'siswa';
+
   // Announcement Form State
   const [annTitle, setAnnTitle] = useState('');
   const [annContent, setAnnContent] = useState('');
   const [targetRole, setTargetRole] = useState<'all' | 'guru' | 'siswa'>('all');
+  const [targetClassId, setTargetClassId] = useState<string>('all');
+
+  // Kunci sasaran ke siswa jika role adalah guru
+  React.useEffect(() => {
+    if (isGuru) {
+      setTargetRole('siswa');
+    }
+  }, [isGuru]);
 
   // Event Form State
   const [eventTitle, setEventTitle] = useState('');
@@ -28,29 +40,51 @@ export const AnnouncementModule: React.FC = () => {
   const [eventEndDate, setEventEndDate] = useState('');
   const [eventType, setEventType] = useState<'akademik' | 'libur' | 'ujian' | 'kegiatan' | 'upacara'>('akademik');
 
-  const isAdmin = role === 'admin';
-  const isGuru = role === 'guru';
-  const isSiswa = role === 'siswa';
-
-  // Filter announcements for current user's role
+  // Filter pengumuman sesuai peran pengguna
   const visibleAnnouncements = announcements.filter((a) => {
-    if (a.target_role === 'all') return true;
-    if (role === 'admin') return true;
+    if (isAdmin) return true;
+    if (isGuru) {
+      // Guru melihat pengumuman umum/sekolah, untuk guru, atau yang ditujukan ke siswa/dibuat olehnya
+      if (a.target_role === 'all' || a.target_role === 'guru') return true;
+      if (a.author_id && currentUser?.id && a.author_id === currentUser.id) return true;
+      if (a.author_name && currentUser?.full_name && a.author_name.toLowerCase().trim() === currentUser.full_name.toLowerCase().trim()) return true;
+      return a.target_role === 'siswa';
+    }
+    if (isSiswa) {
+      // Siswa hanya melihat pengumuman umum atau pengumuman khusus siswa untuk kelasnya/semua kelas
+      if (a.target_role === 'all') return true;
+      if (a.target_role === 'siswa') {
+        if (!a.class_id || a.class_id === 'all') return true;
+        if (studentProfile?.class_id && a.class_id === studentProfile.class_id) return true;
+      }
+      return false;
+    }
     return a.target_role === role;
   });
 
   const handleCreateAnnouncement = (e: React.FormEvent) => {
     e.preventDefault();
+    const effectiveRole = isGuru ? 'siswa' : targetRole;
+    const targetCls = classes.find(c => c.id === targetClassId);
+    const className = targetClassId === 'all' 
+      ? (effectiveRole === 'siswa' ? 'Semua Kelas Siswa' : 'Semua Warga') 
+      : (targetCls ? `${targetCls.name}` : '');
+
     addAnnouncement({
       title: annTitle,
       content: annContent,
-      target_role: targetRole,
+      target_role: effectiveRole,
+      class_id: targetClassId === 'all' ? undefined : targetClassId,
+      class_name: className,
       published_date: new Date().toISOString().split('T')[0],
+      author_id: currentUser?.id,
+      author_name: currentUser?.full_name || (isGuru ? 'Guru Pengajar' : 'Administrator'),
       is_active: true,
     });
     setIsAnnModalOpen(false);
     setAnnTitle('');
     setAnnContent('');
+    setTargetClassId('all');
   };
 
   const handleCreateEvent = (e: React.FormEvent) => {
@@ -83,16 +117,25 @@ export const AnnouncementModule: React.FC = () => {
       ),
     },
     {
-      header: 'Target Penerima',
+      header: 'Target Penerima & Rombel',
       cell: (a) => {
-        let badge = 'bg-blue-100 text-blue-700';
-        if (a.target_role === 'guru') badge = 'bg-emerald-100 text-emerald-700';
-        if (a.target_role === 'siswa') badge = 'bg-purple-100 text-purple-700';
+        let badge = 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
+        if (a.target_role === 'guru') badge = 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300';
+        if (a.target_role === 'siswa') badge = 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300';
+
+        const cls = a.class_name || (a.class_id ? classes.find(c => c.id === a.class_id)?.name : null);
 
         return (
-          <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase ${badge}`}>
-            {a.target_role === 'all' ? 'Semua Warga' : a.target_role}
-          </span>
+          <div className="space-y-1">
+            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase inline-block ${badge}`}>
+              {a.target_role === 'all' ? 'Semua Warga' : a.target_role === 'guru' ? 'Dewan Guru' : 'Siswa'}
+            </span>
+            {a.target_role === 'siswa' && cls && (
+              <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                {cls}
+              </p>
+            )}
+          </div>
         );
       },
     },
@@ -246,20 +289,53 @@ export const AnnouncementModule: React.FC = () => {
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Sasaran Penerima *
-            </label>
-            <select
-              value={targetRole}
-              onChange={(e) => setTargetRole(e.target.value as any)}
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none"
-            >
-              <option value="all">Semua Warga Sekolah (Umum)</option>
-              <option value="guru">Khusus Dewan Guru & Staf</option>
-              <option value="siswa">Khusus Peserta Didik (Siswa)</option>
-            </select>
-          </div>
+          {isGuru ? (
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Sasaran Penerima *
+              </label>
+              <div className="p-2.5 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-xs font-bold text-purple-700 dark:text-purple-300 flex items-center justify-between">
+                <span>Khusus Peserta Didik (Siswa)</span>
+                <span className="text-[10px] bg-purple-200/80 dark:bg-purple-900/60 px-2 py-0.5 rounded-full">Role Guru</span>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Sasaran Penerima *
+              </label>
+              <select
+                value={targetRole}
+                onChange={(e) => setTargetRole(e.target.value as any)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none"
+              >
+                <option value="all">Semua Warga Sekolah (Umum)</option>
+                <option value="guru">Khusus Dewan Guru & Staf</option>
+                <option value="siswa">Khusus Peserta Didik (Siswa)</option>
+              </select>
+            </div>
+          )}
+
+          {/* Pemilihan Rombel / Kelas (Wajib jika Guru, atau jika Admin memilih target Siswa) */}
+          {(isGuru || targetRole === 'siswa') && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Pilih Target Rombel / Kelas Siswa *
+              </label>
+              <select
+                value={targetClassId}
+                onChange={(e) => setTargetClassId(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none"
+              >
+                <option value="all">Semua Kelas (Seluruh Siswa)</option>
+                {classes.map((cls) => (
+                  <option key={cls.id} value={cls.id}>
+                    {cls.name} ({cls.grade_level} {cls.major})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">

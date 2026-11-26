@@ -205,6 +205,8 @@ export interface Grade {
   subject_name?: string;
   class_id: string;
   class_name?: string;
+  teacher_id?: string;
+  teacher_name?: string;
   semester_id?: string;
   academic_year_id?: string;
   component_id?: string;
@@ -304,6 +306,7 @@ export interface Announcement {
   attachment_url?: string;
   target_role: 'all' | 'guru' | 'siswa';
   class_id?: string;
+  class_name?: string;
   published_date: string;
   author_id?: string;
   author_name?: string;
