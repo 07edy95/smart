@@ -74,7 +74,7 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 sm:p-6 lg:p-10 bg-gradient-to-br from-[#1A5CD6] via-[#1650BE] to-[#0E3BA1] relative overflow-hidden select-none">
+    <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 sm:p-6 lg:p-10 bg-gradient-to-br from-[#1A5CD6] via-[#1650BE] to-[#0E3BA1] relative overflow-hidden select-none">
       {/* Background ambient lighting */}
       <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-blue-400/25 blur-3xl pointer-events-none" />
       <div className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none" />
@@ -258,30 +258,30 @@ export const LoginPage: React.FC = () => {
                 </span>
               </div>
 
-              {/* Secondary Button: Sign In with Other / Bantuan Akun */}
-              <button
-                type="button"
-                onClick={() => setShowHelpModal(true)}
-                className="w-full py-2.5 px-4 rounded-xl border border-slate-800 dark:border-slate-500 text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 font-bold text-xs transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
-              >
-                <span>Sign in with other / Info Akun</span>
-              </button>
-            </form>
-
-            {/* Bottom Support Text */}
-            <p className="text-center text-xs text-slate-400 dark:text-slate-500 pt-1">
-              Don't have an account?{' '}
+              {/* Tombol Sign Up Dinaikkan ke Atas */}
               <button
                 type="button"
                 onClick={() => setShowForgotModal(true)}
-                className="text-blue-600 dark:text-blue-400 font-bold hover:underline"
+                className="w-full py-2.5 px-4 rounded-xl border border-slate-800 dark:border-slate-500 text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 font-bold text-xs transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
               >
-                Sign up
+                <span>Sign up</span>
               </button>
-            </p>
+            </form>
+
+            {/* Bottom Credit */}
+            <div className="pt-2 text-center">
+              <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">
+                aplikasi dibuat oleh @hanumpedia
+              </p>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Footer Credit Luar Kartu */}
+      <p className="text-center text-xs text-blue-100/90 font-medium mt-4 tracking-wide drop-shadow-sm">
+        aplikasi dibuat oleh @hanumpedia
+      </p>
 
       {/* ================= MODAL: LUPA KATA SANDI / SIGN UP ================= */}
       {showForgotModal && (
