@@ -241,7 +241,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // --- Core Data Stores ---
   const [profiles, setProfiles] = usePersistentState<Profile[]>('profiles', initialProfiles);
-  const [currentUser, setCurrentUser] = usePersistentState<Profile | null>('current_user', null);
+  
+  // Inisialisasi currentUser: Pastikan ketika pertama kali membuka link (sesi baru browser), user langsung ke Login Page
+  const [currentUser, setCurrentUser] = useState<Profile | null>(() => {
+    try {
+      const isSessionActive = sessionStorage.getItem('sms_session_active') === 'true';
+      const lastActive = localStorage.getItem('sms_last_active_timestamp');
+      const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+
+      // Jika belum login di sesi tab ini atau sudah lewat 30 menit, wajib tampilkan Login Page
+      if (!isSessionActive || !lastActive || (Date.now() - Number(lastActive) >= INACTIVITY_TIMEOUT_MS)) {
+        localStorage.removeItem('sms_current_user');
+        localStorage.removeItem('sms_last_active_timestamp');
+        sessionStorage.removeItem('sms_session_active');
+        return null;
+      }
+
+      const item = localStorage.getItem('sms_current_user');
+      return item ? JSON.parse(item) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  // Sinkronkan currentUser ke localStorage
+  useEffect(() => {
+    try {
+      if (currentUser) {
+        localStorage.setItem('sms_current_user', JSON.stringify(currentUser));
+      } else {
+        localStorage.removeItem('sms_current_user');
+      }
+    } catch (e) {
+      console.error('Failed to persist currentUser:', e);
+    }
+  }, [currentUser]);
   const [schoolSettings, setSchoolSettings] = usePersistentState<SchoolSettings>('school_settings', initialSchoolSettings);
   const [academicYears, setAcademicYears] = usePersistentState<AcademicYear[]>('academic_years', initialAcademicYears);
   const [semesters, setSemesters] = usePersistentState<Semester[]>('semesters', initialSemesters);
@@ -894,6 +928,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (authData.status === 'success' && authData.user) {
           setCurrentUser(authData.user);
           try {
+            sessionStorage.setItem('sms_session_active', 'true');
             localStorage.setItem('sms_last_active_timestamp', String(Date.now()));
           } catch (e) {}
           logAction('LOGIN', 'Autentikasi', `Login berhasil via MySQL: ${authData.user.full_name} (${authData.user.role})`);
@@ -986,7 +1021,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     if (!matchedProfile) {
-      showToast('Login Gagal', 'Username atau email tidak terdaftar di sistem.', 'error');
       return false;
     }
 
@@ -1006,13 +1040,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     if (trimmedPass && !validPasswords.includes(trimmedPass)) {
-      const defaultHint = getDefaultPassword(matchedProfile.role);
-      showToast('Kata Sandi Salah', `Password salah. Default login ${matchedProfile.role}: ${defaultHint}`, 'error');
       return false;
     }
 
     setCurrentUser(matchedProfile);
     try {
+      sessionStorage.setItem('sms_session_active', 'true');
       localStorage.setItem('sms_last_active_timestamp', String(Date.now()));
     } catch (e) {}
     logAction('LOGIN', 'Autentikasi', `User ${matchedProfile.full_name} (${matchedProfile.role}) berhasil masuk`);
@@ -1026,6 +1059,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       localStorage.removeItem('sms_current_user');
       localStorage.removeItem('sms_last_active_timestamp');
+      sessionStorage.removeItem('sms_session_active');
     } catch (e) {}
     showToast('Logout Berhasil', 'Anda telah keluar dari aplikasi.');
   };
@@ -1042,6 +1076,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         localStorage.removeItem('sms_current_user');
         localStorage.removeItem('sms_last_active_timestamp');
+        sessionStorage.removeItem('sms_session_active');
       } catch (e) {}
       showToast(
         'Sesi Berakhir',
@@ -1061,16 +1096,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Periksa apakah waktu aktivitas terakhir telah kadaluarsa saat halaman dimuat/kembali
     const storedLastActive = localStorage.getItem('sms_last_active_timestamp');
-    if (storedLastActive) {
-      const elapsed = Date.now() - Number(storedLastActive);
-      if (elapsed >= INACTIVITY_TIMEOUT_MS) {
-        performAutoLogout();
-        return;
-      }
-      timeoutId = setTimeout(performAutoLogout, INACTIVITY_TIMEOUT_MS - elapsed);
-    } else {
-      resetTimer();
+    const isSessionActive = sessionStorage.getItem('sms_session_active') === 'true';
+    if (!storedLastActive || !isSessionActive) {
+      performAutoLogout();
+      return;
     }
+    const elapsed = Date.now() - Number(storedLastActive);
+    if (elapsed >= INACTIVITY_TIMEOUT_MS) {
+      performAutoLogout();
+      return;
+    }
+    timeoutId = setTimeout(performAutoLogout, INACTIVITY_TIMEOUT_MS - elapsed);
 
     // Pantau interaksi pengguna dengan throttling 10 detik agar hemat performa
     let lastThrottledTime = Date.now();

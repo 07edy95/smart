@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { User, Lock, ArrowRight, HelpCircle, School, Info, Check } from 'lucide-react';
+import { User, Lock, ArrowRight, HelpCircle, School, Info, Check, AlertCircle } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const { login, schoolSettings } = useApp();
@@ -13,11 +13,53 @@ export const LoginPage: React.FC = () => {
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
 
+  // Counter kesalahan login dan popup peringatan
+  const [failedAttempts, setFailedAttempts] = useState<number>(() => {
+    try {
+      return Number(sessionStorage.getItem('sms_failed_login_count') || '0');
+    } catch {
+      return 0;
+    }
+  });
+
+  const [errorPopup, setErrorPopup] = useState<{
+    message: string;
+    type: 'retry' | 'locked';
+    attempts: number;
+  } | null>(null);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    await login(identifier, password);
+    const success = await login(identifier, password);
     setIsLoading(false);
+
+    if (!success) {
+      const nextCount = failedAttempts + 1;
+      setFailedAttempts(nextCount);
+      try {
+        sessionStorage.setItem('sms_failed_login_count', String(nextCount));
+      } catch {}
+
+      if (nextCount >= 6) {
+        setErrorPopup({
+          message: " Waduhh, Lupa yaa?, Silahkan hubungi admin aja ya :)",
+          type: 'locked',
+          attempts: nextCount,
+        });
+      } else {
+        setErrorPopup({
+          message: " Maaf ya,, Username atau passwordnya salah, coba lagi yukk !",
+          type: 'retry',
+          attempts: nextCount,
+        });
+      }
+    } else {
+      setFailedAttempts(0);
+      try {
+        sessionStorage.removeItem('sms_failed_login_count');
+      } catch {}
+    }
   };
 
   // 3D sphere gradient styling matching the reference image
@@ -310,6 +352,77 @@ export const LoginPage: React.FC = () => {
             >
               Saya Mengerti
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ================= POPUP MODAL: KESALAHAN LOGIN ================= */}
+      {errorPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/65 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-800 rounded-[28px] sm:rounded-[32px] p-6 sm:p-8 max-w-sm w-full space-y-5 shadow-2xl border border-slate-100 dark:border-slate-700 animate-in zoom-in-95 duration-200 text-center">
+            
+            {/* Animated / Expressive Icon */}
+            <div className={`w-16 h-16 rounded-2xl mx-auto flex items-center justify-center ${
+              errorPopup.type === 'locked' 
+                ? 'bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400' 
+                : 'bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'
+            }`}>
+              {errorPopup.type === 'locked' ? (
+                <HelpCircle className="w-8 h-8 animate-bounce" />
+              ) : (
+                <AlertCircle className="w-8 h-8" />
+              )}
+            </div>
+
+            {/* Popup Message */}
+            <div className="space-y-2">
+              <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white leading-relaxed">
+                {errorPopup.message}
+              </h3>
+              {errorPopup.type === 'locked' ? (
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Sudah 6 kali percobaan login tidak berhasil. Silakan hubungi Administrator IT Sekolah di Tata Usaha.
+                </p>
+              ) : (
+                <p className="text-xs text-slate-400 dark:text-slate-500">
+                  Percobaan ke-{errorPopup.attempts} dari 6 kali batas percobaan
+                </p>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="space-y-2 pt-1">
+              {errorPopup.type === 'locked' ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setErrorPopup(null);
+                      setShowForgotModal(true);
+                    }}
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs shadow-md shadow-blue-500/25 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                  >
+                    <School className="w-4 h-4" />
+                    <span>Hubungi Admin / Tata Usaha</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setErrorPopup(null)}
+                    className="w-full py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 font-semibold text-xs transition-all"
+                  >
+                    Tutup
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setErrorPopup(null)}
+                  className="w-full py-3 rounded-xl bg-[#10316B] hover:bg-[#0c2654] text-white font-bold text-xs shadow-md shadow-blue-950/20 transition-all active:scale-[0.98]"
+                >
+                  Coba Lagi Yukk
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
