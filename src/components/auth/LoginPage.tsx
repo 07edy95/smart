@@ -271,17 +271,12 @@ export const LoginPage: React.FC = () => {
             {/* Bottom Credit */}
             <div className="pt-2 text-center">
               <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">
-                aplikasi dibuat oleh @hanumpedia
+                Aplikasi ini dibuat oleh @hanumpedia
               </p>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Footer Credit Luar Kartu */}
-      <p className="text-center text-xs text-blue-100/90 font-medium mt-4 tracking-wide drop-shadow-sm">
-        aplikasi dibuat oleh @hanumpedia
-      </p>
 
       {/* ================= MODAL: LUPA KATA SANDI / SIGN UP ================= */}
       {showForgotModal && (
