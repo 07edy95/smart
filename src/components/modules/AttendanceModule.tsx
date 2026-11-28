@@ -14,7 +14,7 @@ export const AttendanceModule: React.FC = () => {
     studentAttendance, recordStudentAttendance, 
     teacherAttendance, recordTeacherAttendance, 
     role, currentUser, studentProfile, teacherProfile,
-    teacherSubjects, teacherClasses 
+    teacherSubjects, teacherClasses, showToast 
   } = useApp();
 
   const isSiswa = role === 'siswa';
@@ -42,7 +42,7 @@ export const AttendanceModule: React.FC = () => {
   // Bulk records mapped by student ID
   const classStudents = students.filter((s) => s.class_id === selectedClassId);
 
-  const [attendanceMap, setAttendanceMap] = useState<Record<string, { status: 'hadir' | 'sakit' | 'izin' | 'alpa' | 'dispensasi'; notes: string }>>({});
+  const [attendanceMap, setAttendanceMap] = useState<Record<string, { status: 'hadir' | 'sakit' | 'izin' | 'alpa' | 'dispensasi' | ''; notes: string }>>({});
 
   // Guru Attendance Form State
   const [guruTeacherId, setGuruTeacherId] = useState(teacherProfile?.id || teachers[0]?.id || '');
@@ -73,7 +73,7 @@ export const AttendanceModule: React.FC = () => {
     }
   }, [isGuru, teacherProfile]);
 
-  // Initialize or update attendance map when class changes
+  // Initialize or update attendance map when class changes (default status kosong / tanpa isian)
   React.useEffect(() => {
     const initial: Record<string, { status: any; notes: string }> = {};
     classStudents.forEach((std) => {
@@ -81,21 +81,24 @@ export const AttendanceModule: React.FC = () => {
         (a) => a.student_id === std.id && a.date === attendanceDate && a.subject_id === selectedSubjectId
       );
       initial[std.id] = {
-        status: existing?.status || 'hadir',
+        status: existing?.status || '',
         notes: existing?.notes || '',
       };
     });
     setAttendanceMap(initial);
   }, [selectedClassId, selectedSubjectId, attendanceDate, studentAttendance]);
 
-  const handleStatusChange = (studentId: string, status: any) => {
-    setAttendanceMap((prev) => ({
-      ...prev,
-      [studentId]: {
-        ...prev[studentId],
-        status,
-      },
-    }));
+  const handleStatusChange = (studentId: string, newStatus: any) => {
+    setAttendanceMap((prev) => {
+      const current = prev[studentId]?.status || '';
+      return {
+        ...prev,
+        [studentId]: {
+          ...prev[studentId],
+          status: current === newStatus ? '' : newStatus,
+        },
+      };
+    });
   };
 
   const handleNotesChange = (studentId: string, notes: string) => {
@@ -119,13 +122,39 @@ export const AttendanceModule: React.FC = () => {
     setAttendanceMap(updated);
   };
 
+  const handleResetAllStatus = () => {
+    const updated: Record<string, any> = {};
+    classStudents.forEach((std) => {
+      updated[std.id] = {
+        status: '',
+        notes: attendanceMap[std.id]?.notes || '',
+      };
+    });
+    setAttendanceMap(updated);
+  };
+
   const handleSaveStudentAttendance = (e: React.FormEvent) => {
     e.preventDefault();
+    if (classStudents.length === 0) {
+      showToast('Perhatian', 'Tidak ada data siswa dalam rombel ini.', 'warning');
+      return;
+    }
+
+    const unassigned = classStudents.filter((std) => !attendanceMap[std.id]?.status);
+    if (unassigned.length > 0) {
+      showToast(
+        'Status Belum Lengkap',
+        `Terdapat ${unassigned.length} siswa yang belum ditentukan status kehadirannya (Hadir, Sakit, Izin, atau Alpa).`,
+        'warning'
+      );
+      return;
+    }
+
     const currentSub = accessibleSubjects.find(s => s.id === selectedSubjectId) || subjects.find(s => s.id === selectedSubjectId);
     const currentCls = accessibleClasses.find(c => c.id === selectedClassId) || classes.find(c => c.id === selectedClassId);
 
     const records = classStudents.map((std) => {
-      const entry = attendanceMap[std.id] || { status: 'hadir', notes: '' };
+      const entry = attendanceMap[std.id] || { status: '', notes: '' };
       return {
         student_id: std.id,
         student_name: std.full_name,
@@ -134,8 +163,8 @@ export const AttendanceModule: React.FC = () => {
         subject_id: selectedSubjectId,
         subject_name: currentSub?.name,
         date: attendanceDate,
-        status: entry.status,
-        notes: entry.notes,
+        status: entry.status as 'hadir' | 'sakit' | 'izin' | 'alpa' | 'dispensasi',
+        notes: entry.notes || '',
       };
     });
 
@@ -273,6 +302,7 @@ export const AttendanceModule: React.FC = () => {
   const totalSakit = classRecords.filter((r) => r.status === 'sakit').length;
   const totalIzin = classRecords.filter((r) => r.status === 'izin').length;
   const totalAlpa = classRecords.filter((r) => r.status === 'alpa').length;
+  const totalKosong = classStudents.filter((std) => !attendanceMap[std.id]?.status).length;
 
   return (
     <div className="space-y-6">
@@ -403,13 +433,27 @@ export const AttendanceModule: React.FC = () => {
                 <span className="px-3 py-1 rounded-full font-bold bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
                   Alpa: {totalAlpa}
                 </span>
+                {totalKosong > 0 && (
+                  <span className="px-3 py-1 rounded-full font-bold bg-amber-100/90 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300/60 dark:border-amber-700/60">
+                    Belum Ditentukan: {totalKosong}
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center gap-2">
                 <button
                   type="button"
+                  onClick={handleResetAllStatus}
+                  className="clay-btn-secondary text-xs py-1.5 px-3 text-slate-600 dark:text-slate-400"
+                  title="Kosongkan seluruh pilihan status kehadiran"
+                >
+                  Kosongkan Semua
+                </button>
+                <button
+                  type="button"
                   onClick={handleSetAllPresent}
                   className="clay-btn-secondary text-xs py-1.5 px-3"
+                  title="Pilih Hadir untuk semua siswa"
                 >
                   Set Semua Hadir
                 </button>
@@ -439,7 +483,7 @@ export const AttendanceModule: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {classStudents.map((std, idx) => {
-                    const status = attendanceMap[std.id]?.status || 'hadir';
+                    const status = attendanceMap[std.id]?.status || '';
                     const notes = attendanceMap[std.id]?.notes || '';
 
                     return (
@@ -452,7 +496,9 @@ export const AttendanceModule: React.FC = () => {
                         </td>
                         <td className="p-3.5 text-xs text-slate-500">{std.nis}</td>
                         <td className="p-3.5 text-center">
-                          <div className="inline-flex p-1 rounded-xl bg-slate-100 dark:bg-slate-800 gap-1">
+                          <div className={`inline-flex p-1 rounded-xl bg-slate-100 dark:bg-slate-800 gap-1 border transition-all ${
+                            !status ? 'border-amber-300 dark:border-amber-700/80 bg-amber-50/50 dark:bg-amber-950/20' : 'border-transparent'
+                          }`}>
                             {(['hadir', 'sakit', 'izin', 'alpa'] as const).map((st) => (
                               <button
                                 key={st}
@@ -474,6 +520,11 @@ export const AttendanceModule: React.FC = () => {
                               </button>
                             ))}
                           </div>
+                          {!status && (
+                            <span className="block text-[10px] text-amber-600 dark:text-amber-400 font-medium mt-1">
+                              Belum dipilih
+                            </span>
+                          )}
                         </td>
                         <td className="p-3.5">
                           <input
